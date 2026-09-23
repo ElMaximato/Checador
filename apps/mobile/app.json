@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Checador",
+    "slug": "checador-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permite el acceso a la cámara para tomar tu foto de asistencia."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permite usar Face ID para verificar tu identidad al checar."
+        }
+      ]
+    ],
+    "ios": { "supportsTablet": false },
+    "android": {}
+  }
+}

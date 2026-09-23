@@ -1,0 +1,24 @@
+# Dependencias
+node_modules/
+**/node_modules/
+
+# Builds
+dist/
+build/
+.expo/
+**/.expo/
+
+# Variables de entorno (nunca subir credenciales reales)
+.env
+.env.local
+**/.env
+!**/.env.example
+
+# Archivos subidos por usuarios (fotos de asistencia en local)
+apps/backend/uploads/**
+!apps/backend/uploads/asistencia/.gitkeep
+
+# Sistema
+.DS_Store
+*.log
+npm-debug.log*
