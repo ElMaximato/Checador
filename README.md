@@ -71,5 +71,4 @@ Aún no iniciados.
 La app ya está **conectada al backend real**: activación por PIN,
 sesión guardada con `expo-secure-store`, candado biométrico diario,
 consulta de jornada del día, y envío real de entrada/salida con foto.
-Pendiente: nombre de perfil y resumen mensual en Home/Profile siguen
-usando datos de ejemplo (faltan esos endpoints en el backend).
+Pendiente: empaquetar el APK y me imagino que conectar con app TV y futuras implementaciones.
