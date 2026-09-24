@@ -144,4 +144,28 @@ function toSeconds(hhmmss) {
   return h * 3600 + m * 60 + s;
 }
 
-module.exports = { registrarEntrada, registrarSalida };
+// GET /api/attendance/hoy — estado de la jornada de hoy del empleado
+// (o null si aún no ha checado entrada). El móvil lo usa para decidir
+// si mostrar "Registrar entrada" o "Registrar salida".
+async function obtenerJornadaHoy(req, res) {
+  const empleadoId = req.empleadoId;
+  const fecha = hoyISO();
+
+  const [rows] = await pool.query(
+    "SELECT estado, puntualidad, hora_entrada, hora_salida FROM jornadas WHERE empleado_id = ? AND fecha = ? LIMIT 1",
+    [empleadoId, fecha]
+  );
+  const jornada = rows[0];
+  if (!jornada) return res.json({ jornada: null });
+
+  res.json({
+    jornada: {
+      estado: jornada.estado,
+      puntualidad: jornada.puntualidad,
+      horaEntrada: new Date(jornada.hora_entrada).toTimeString().slice(0, 5),
+      horaSalida: jornada.hora_salida ? new Date(jornada.hora_salida).toTimeString().slice(0, 5) : null,
+    },
+  });
+}
+
+module.exports = { registrarEntrada, registrarSalida, obtenerJornadaHoy };

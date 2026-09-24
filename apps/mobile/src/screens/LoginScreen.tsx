@@ -1,22 +1,35 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as LocalAuthentication from "expo-local-authentication";
 import { Icon } from "../components/Icon";
 import { colors } from "../theme/colors";
 
-// TODO backend: reemplazar este mock por la validación real de la
-// sesión de dispositivo (Capa 1: PIN de activación / refresh token
-// guardado en expo-secure-store). Este componente solo dispara
-// onContinue() cuando la sesión de dispositivo es válida.
+// El dispositivo ya está activado (App.tsx solo llega aquí si hay
+// token guardado). Este candado biométrico es el paso diario:
+// confirma "eres el dueño de este teléfono" antes de entrar a Home.
 export function LoginScreen({ onContinue }: { onContinue: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const identify = () => {
+  const identify = async () => {
     setLoading(true);
-    setTimeout(() => {
+    setError(null);
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Confirma tu identidad",
+        disableDeviceFallback: false,
+      });
+      if (result.success) {
+        onContinue();
+      } else {
+        setError("No se pudo verificar tu huella. Intenta de nuevo.");
+      }
+    } catch {
+      setError("No se pudo verificar tu huella. Intenta de nuevo.");
+    } finally {
       setLoading(false);
-      onContinue();
-    }, 650);
+    }
   };
 
   return (
@@ -56,12 +69,10 @@ export function LoginScreen({ onContinue }: { onContinue: () => void }) {
           <Icon name="lock" size={16} color="#2b8589" />
           <Text style={styles.secureNoteText}>Tus datos biométricos están protegidos</Text>
         </View>
+        {error && <Text style={styles.errorText}>{error}</Text>}
       </View>
 
       <View style={styles.footer}>
-        <Pressable onPress={onContinue}>
-          <Text style={styles.footerLink}>Usar ID de empleado</Text>
-        </Pressable>
         <Text style={styles.footerVersion}>Control de asistencia · Versión 2.4</Text>
       </View>
     </SafeAreaView>
@@ -124,6 +135,7 @@ const styles = StyleSheet.create({
   biometricSubtitle: { marginTop: 5, fontSize: 13, color: "#7b8796" },
   secureNote: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 23 },
   secureNoteText: { fontSize: 12, color: "#7e8a97" },
+  errorText: { marginTop: 16, fontSize: 12, color: "#c0392b", textAlign: "center" },
   footer: { alignItems: "center", paddingBottom: 28, paddingTop: 12 },
   footerLink: { color: colors.primary, fontSize: 14, fontWeight: "700" },
   footerVersion: { marginTop: 24, fontSize: 10, color: "#a1aab4", letterSpacing: 0.4 },

@@ -1,21 +1,42 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "../components/Icon";
 import { BottomNav } from "../components/BottomNav";
 import { colors } from "../theme/colors";
-import type { Screen } from "../navigation/types";
+import { obtenerJornadaHoy, type JornadaHoy } from "../api/client";
+import type { GoFn } from "../navigation/types";
 
-// TODO backend: nombre, jornada de hoy (entrada ya registrada o no),
-// horario asignado y resumen mensual deben venir de:
-//   GET /api/empleados/me
-//   GET /api/jornadas/hoy
-export function HomeScreen({ go }: { go: (s: Screen) => void }) {
+// TODO backend: nombre y resumen mensual aún vienen de mock; la
+// jornada de hoy (entrada/salida real) ya se consulta a la API.
+export function HomeScreen({ go }: { go: GoFn }) {
   const [now, setNow] = useState(new Date());
+  const [jornada, setJornada] = useState<JornadaHoy>(null);
+  const [cargando, setCargando] = useState(true);
+
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(t);
   }, []);
+
+  const cargarJornada = useCallback(() => {
+    setCargando(true);
+    obtenerJornadaHoy()
+      .then(setJornada)
+      .catch(() => setJornada(null))
+      .finally(() => setCargando(false));
+  }, []);
+
+  // Home se desmonta y se vuelve a montar cada vez que se navega de
+  // regreso a ella (la navegación de App.tsx es por estado), así que
+  // este efecto refresca la jornada automáticamente cada vez.
+  useEffect(() => {
+    cargarJornada();
+  }, [cargarJornada]);
+
+  const siguienteTipo: "entrada" | "salida" =
+    !jornada || jornada.estado !== "activa" ? "entrada" : "salida";
+  const puedeRegistrar = !cargando && (!jornada || jornada.estado === "activa");
 
   const date = now.toLocaleDateString("es-MX", {
     weekday: "long",
@@ -45,7 +66,9 @@ export function HomeScreen({ go }: { go: (s: Screen) => void }) {
         <View style={styles.timeHero}>
           <View style={styles.statusPill}>
             <View style={styles.statusDot} />
-            <Text style={styles.statusPillText}>Jornada activa</Text>
+            <Text style={styles.statusPillText}>
+              {jornada?.estado === "activa" ? "Jornada activa" : jornada ? "Jornada cerrada" : "Sin registrar hoy"}
+            </Text>
           </View>
           <Text style={styles.heroTime}>{time}</Text>
           <Text style={styles.heroDate}>{date}</Text>
@@ -67,29 +90,39 @@ export function HomeScreen({ go }: { go: (s: Screen) => void }) {
           </View>
 
           <View style={styles.shiftLine}>
-            <View style={styles.doneDot}>
-              <Icon name="check" size={14} color={colors.success} />
+            <View style={jornada ? styles.doneDot : styles.pendingDot}>
+              {jornada && <Icon name="check" size={14} color={colors.success} />}
             </View>
             <View>
               <Text style={styles.shiftLineLabel}>Entrada</Text>
-              <Text style={styles.shiftLineValue}>08:57</Text>
+              <Text style={styles.shiftLineValue}>{jornada?.horaEntrada ?? "— —"}</Text>
             </View>
             <View style={styles.dashLine} />
-            <View style={styles.pendingDot} />
+            <View style={jornada?.horaSalida ? styles.doneDot : styles.pendingDot}>
+              {jornada?.horaSalida && <Icon name="check" size={14} color={colors.success} />}
+            </View>
             <View>
               <Text style={styles.shiftLineLabel}>Salida</Text>
-              <Text style={styles.shiftLineValue}>— —</Text>
+              <Text style={styles.shiftLineValue}>{jornada?.horaSalida ?? "— —"}</Text>
             </View>
           </View>
         </View>
 
-        <Pressable style={styles.primaryAction} onPress={() => go("fingerprint")}>
+        <Pressable
+          style={[styles.primaryAction, !puedeRegistrar && { opacity: 0.5 }]}
+          disabled={!puedeRegistrar}
+          onPress={() => go("fingerprint", { tipo: siguienteTipo })}
+        >
           <View style={styles.actionIcon}>
             <Icon name="fingerprint" size={29} color={colors.white} />
           </View>
           <View>
-            <Text style={styles.actionSmall}>REGISTRO DISPONIBLE</Text>
-            <Text style={styles.actionStrong}>Registrar salida</Text>
+            <Text style={styles.actionSmall}>
+              {jornada?.estado === "expirada_sin_salida" ? "JORNADA EXPIRADA" : "REGISTRO DISPONIBLE"}
+            </Text>
+            <Text style={styles.actionStrong}>
+              {siguienteTipo === "entrada" ? "Registrar entrada" : "Registrar salida"}
+            </Text>
           </View>
           <Icon name="chevron" size={22} color={colors.white} />
         </Pressable>

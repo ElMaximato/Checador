@@ -3,7 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon, type IconName } from "../components/Icon";
 import { BottomNav } from "../components/BottomNav";
 import { colors } from "../theme/colors";
-import type { Screen } from "../navigation/types";
+import type { GoFn } from "../navigation/types";
 
 // TODO backend: GET /api/empleados/me — nombre, puesto, avatar,
 // departamento y horario asignado.
@@ -16,7 +16,7 @@ const rows: { icon: IconName; label: string; value: string }[] = [
   { icon: "clock", label: "Horario asignado", value: "09:00 – 18:00" },
 ];
 
-export function ProfileScreen({ go }: { go: (s: Screen) => void }) {
+export function ProfileScreen({ go }: { go: GoFn }) {
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <View style={styles.content}>

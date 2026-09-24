@@ -2,16 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Icon } from "../components/Icon";
-import type { Screen } from "../navigation/types";
+import { registrarEntrada, registrarSalida, ApiError } from "../api/client";
+import type { GoFn } from "../navigation/types";
 
-// TODO backend: al capturar la foto, envíala junto con el resultado
-// de la huella en POST /api/attendance (entrada|salida). El backend
-// calcula puntualidad y guarda la foto en storage; la respuesta
-// alimenta ConfirmationScreen (ver navigation/types.ts).
-export function CameraScreen({ go }: { go: (s: Screen) => void }) {
+export function CameraScreen({ go, tipo = "entrada" }: { go: GoFn; tipo?: "entrada" | "salida" }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [seconds, setSeconds] = useState(3);
   const [faceDetected] = useState(true); // placeholder: detección real vía librería de visión si se requiere
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const cameraRef = useRef<CameraView>(null);
   const capturedRef = useRef(false);
 
@@ -37,11 +36,28 @@ export function CameraScreen({ go }: { go: (s: Screen) => void }) {
   }, []);
 
   const capture = async () => {
+    setEnviando(true);
+    setError(null);
     try {
-      await cameraRef.current?.takePictureAsync({ quality: 0.6, skipProcessing: true });
-      // TODO: subir foto + registrar asistencia (ver nota arriba)
-    } finally {
-      setTimeout(() => go("confirmation"), 300);
+      const foto = await cameraRef.current?.takePictureAsync({ quality: 0.6, skipProcessing: true });
+      if (!foto?.uri) throw new Error("No se pudo tomar la foto");
+
+      const enviar = tipo === "entrada" ? registrarEntrada : registrarSalida;
+      const respuesta = await enviar(foto.uri);
+
+      go("confirmation", {
+        result: {
+          tipo,
+          hora: respuesta.hora,
+          puntualidad: respuesta.puntualidad,
+          jornadaTotal: respuesta.jornadaTotal,
+        },
+      });
+    } catch (err) {
+      const mensaje = err instanceof ApiError ? err.message : "No se pudo registrar tu asistencia. Intenta de nuevo.";
+      setError(mensaje);
+      setEnviando(false);
+      capturedRef.current = false;
     }
   };
 
@@ -55,6 +71,27 @@ export function CameraScreen({ go }: { go: (s: Screen) => void }) {
         </Text>
         <Pressable style={styles.permissionButton} onPress={requestPermission}>
           <Text style={styles.permissionButtonText}>Dar permiso</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <Text style={styles.permissionText}>{error}</Text>
+        <Pressable
+          style={styles.permissionButton}
+          onPress={() => {
+            setError(null);
+            setSeconds(3);
+            capturedRef.current = false;
+          }}
+        >
+          <Text style={styles.permissionButtonText}>Reintentar</Text>
+        </Pressable>
+        <Pressable style={{ marginTop: 14 }} onPress={() => go("home")}>
+          <Text style={{ color: "#fff", fontSize: 12 }}>Volver al inicio</Text>
         </Pressable>
       </View>
     );
@@ -88,7 +125,9 @@ export function CameraScreen({ go }: { go: (s: Screen) => void }) {
             </View>
           )}
           <Text style={styles.title}>Mira de frente</Text>
-          <Text style={styles.subtitle}>La fotografía se tomará automáticamente</Text>
+          <Text style={styles.subtitle}>
+            {enviando ? "Enviando registro..." : "La fotografía se tomará automáticamente"}
+          </Text>
           <View style={styles.countdown}>
             {seconds > 0 ? (
               <Text style={styles.countdownText}>{seconds}</Text>

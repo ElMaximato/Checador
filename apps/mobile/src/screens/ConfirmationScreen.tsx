@@ -2,25 +2,16 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "../components/Icon";
 import { colors } from "../theme/colors";
-import type { AttendanceResult, Screen } from "../navigation/types";
+import type { AttendanceResult, GoFn } from "../navigation/types";
 
-// TODO backend: `result` debe venir de la respuesta de
-// POST /api/attendance (hora, puntualidad, jornada total ya
-// calculadas por el servidor). Por ahora se usa un mock.
-const mockResult: AttendanceResult = {
-  tipo: "salida",
-  hora: new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false }),
-  puntualidad: "a_tiempo",
-  jornadaTotal: "8 h 03 min",
-};
+export function ConfirmationScreen({ go, result }: { go: GoFn; result?: AttendanceResult }) {
+  if (!result) {
+    // No debería ocurrir en el flujo normal (siempre llega desde
+    // CameraScreen con el resultado real), pero evita una pantalla rota.
+    go("home");
+    return null;
+  }
 
-export function ConfirmationScreen({
-  go,
-  result = mockResult,
-}: {
-  go: (s: Screen) => void;
-  result?: AttendanceResult;
-}) {
   const today = new Date().toLocaleDateString("es-MX", {
     day: "numeric",
     month: "long",

@@ -3,7 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "../components/Icon";
 import { BottomNav } from "../components/BottomNav";
 import { colors } from "../theme/colors";
-import type { Screen } from "../navigation/types";
+import type { GoFn } from "../navigation/types";
 
 // TODO backend: reemplazar por GET /api/jornadas?empleado_id=&mes=
 const records = [
@@ -13,7 +13,7 @@ const records = [
   { day: "09", dow: "LUN", entry: "08:55", exit: "17:01", hours: "8 h 06 min", status: "A tiempo", good: true },
 ];
 
-export function HistoryScreen({ go }: { go: (s: Screen) => void }) {
+export function HistoryScreen({ go }: { go: GoFn }) {
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <View style={styles.content}>

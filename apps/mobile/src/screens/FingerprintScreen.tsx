@@ -4,11 +4,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as LocalAuthentication from "expo-local-authentication";
 import { Icon } from "../components/Icon";
 import { colors } from "../theme/colors";
-import type { Screen } from "../navigation/types";
+import type { GoFn } from "../navigation/types";
 
 type ScanState = "idle" | "scanning" | "error";
 
-export function FingerprintScreen({ go }: { go: (s: Screen) => void }) {
+export function FingerprintScreen({ go, tipo = "entrada" }: { go: GoFn; tipo?: "entrada" | "salida" }) {
   const [state, setState] = useState<ScanState>("idle");
 
   const scan = async () => {
@@ -22,7 +22,7 @@ export function FingerprintScreen({ go }: { go: (s: Screen) => void }) {
       if (result.success) {
         // La huella solo confirma "eres el dueño de este teléfono".
         // El siguiente paso (cámara) es la evidencia de asistencia real.
-        go("camera");
+        go("camera", { tipo });
       } else {
         setState("error");
       }

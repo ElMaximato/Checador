@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "./Icon";
 import { colors } from "../theme/colors";
-import type { Screen } from "../navigation/types";
+import type { Screen, GoFn } from "../navigation/types";
 
 const items: { label: string; icon: IconName; screen: Screen }[] = [
   { label: "Inicio", icon: "home", screen: "home" },
@@ -14,7 +14,7 @@ export function BottomNav({
   go,
 }: {
   screen: Screen;
-  go: (s: Screen) => void;
+  go: GoFn;
 }) {
   return (
     <View style={styles.nav}>
