@@ -12,13 +12,13 @@ import type { GoFn } from "../navigation/types";
 // el dispositivo y hay que reactivar). RH le da al empleado su ID +
 // el PIN de un solo uso generado desde el Admin Web.
 export function ActivationScreen({ go }: { go: GoFn }) {
-  const [empleadoId, setEmpleadoId] = useState("");
+  const [codigo, setCodigo] = useState("");
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const activar = async () => {
-    if (!empleadoId || !pin) {
+    if (!codigo.trim() || !pin) {
       setError("Ingresa tu ID de empleado y el PIN.");
       return;
     }
@@ -27,7 +27,7 @@ export function ActivationScreen({ go }: { go: GoFn }) {
     try {
       const deviceId = await obtenerOCrearDeviceId();
       const deviceInfo = `${Device.modelName ?? "desconocido"} / ${Device.osName ?? ""} ${Device.osVersion ?? ""}`;
-      const { token } = await activarDispositivo({ empleadoId, pin, deviceId, deviceInfo });
+      const { token } = await activarDispositivo({ codigo: codigo.trim(), pin, deviceId, deviceInfo });
       await guardarToken(token);
       go("home");
     } catch (err: any) {
@@ -53,11 +53,12 @@ export function ActivationScreen({ go }: { go: GoFn }) {
           <Text style={styles.label}>ID de empleado</Text>
           <TextInput
             style={styles.input}
-            placeholder="Ej. NX-2847"
+            placeholder="Ej. NX-0000"
             placeholderTextColor="#a7b0ba"
             autoCapitalize="characters"
-            value={empleadoId}
-            onChangeText={setEmpleadoId}
+            value={codigo}
+            onChangeText={setCodigo}
+            autoCorrect={false}
           />
 
           <Text style={styles.label}>PIN de activación</Text>

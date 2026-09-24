@@ -1,19 +1,48 @@
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Icon } from "../components/Icon";
 import { BottomNav } from "../components/BottomNav";
 import { colors } from "../theme/colors";
+import { obtenerHistorial, type Historial } from "../api/client";
+import { MESES, formatearMinutos, mesActual, porcentaje } from "../utils/format";
 import type { GoFn } from "../navigation/types";
 
-// TODO backend: reemplazar por GET /api/jornadas?empleado_id=&mes=
-const records = [
-  { day: "12", dow: "JUE", entry: "08:57", exit: "17:00", hours: "8 h 03 min", status: "A tiempo", good: true },
-  { day: "11", dow: "MIÉ", entry: "09:08", exit: "18:02", hours: "8 h 54 min", status: "Retardo", good: false },
-  { day: "10", dow: "MAR", entry: "08:51", exit: "17:04", hours: "8 h 13 min", status: "A tiempo", good: true },
-  { day: "09", dow: "LUN", entry: "08:55", exit: "17:01", hours: "8 h 06 min", status: "A tiempo", good: true },
-];
+// Suma o resta meses a un "YYYY-MM".
+function moverMes(mes: string, delta: number) {
+  const [y, m] = mes.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function etiquetaMes(mes: string) {
+  const [y, m] = mes.split("-").map(Number);
+  return `${MESES[m - 1]} ${y}`;
+}
 
 export function HistoryScreen({ go }: { go: GoFn }) {
+  const [mes, setMes] = useState(mesActual());
+  const [data, setData] = useState<Historial | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    setError(null);
+    obtenerHistorial(mes)
+      .then((h) => !cancelado && setData(h))
+      .catch((e) => !cancelado && setError(e?.message ?? "No se pudo cargar el historial"))
+      .finally(() => !cancelado && setCargando(false));
+    return () => {
+      cancelado = true;
+    };
+  }, [mes, intento]);
+
+  const esMesActual = mes === mesActual();
+  const resumen = data?.resumen;
+  const registros = data?.registros ?? [];
+
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <View style={styles.content}>
@@ -22,69 +51,96 @@ export function HistoryScreen({ go }: { go: GoFn }) {
             <Text style={styles.eyebrow}>MI ACTIVIDAD</Text>
             <Text style={styles.title}>Historial</Text>
           </View>
-          <Pressable style={styles.iconButton}>
-            <Icon name="calendar" size={20} color="#3e4a5c" />
-          </Pressable>
         </View>
 
         <View style={styles.monthSelector}>
-          <Text style={styles.monthArrow}>‹</Text>
-          <Text style={styles.monthLabel}>Junio 2025</Text>
-          <Text style={styles.monthArrow}>›</Text>
+          <Pressable hitSlop={12} onPress={() => setMes(moverMes(mes, -1))}>
+            <Text style={styles.monthArrow}>‹</Text>
+          </Pressable>
+          <Text style={styles.monthLabel}>{etiquetaMes(mes)}</Text>
+          <Pressable hitSlop={12} disabled={esMesActual} onPress={() => setMes(moverMes(mes, 1))}>
+            <Text style={[styles.monthArrow, esMesActual && { opacity: 0.25 }]}>›</Text>
+          </Pressable>
         </View>
 
         <View style={styles.monthStats}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>9</Text>
+            <Text style={styles.statValue}>{resumen ? resumen.diasLaborados : "—"}</Text>
             <Text style={styles.statLabel}>Días laborados</Text>
           </View>
           <View style={[styles.statItem, styles.statItemBorder]}>
-            <Text style={styles.statValue}>72.4 h</Text>
+            <Text style={styles.statValue}>
+              {resumen ? `${(resumen.minutosTotales / 60).toFixed(1)} h` : "—"}
+            </Text>
             <Text style={styles.statLabel}>Horas totales</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>96%</Text>
+            <Text style={styles.statValue}>{porcentaje(resumen?.puntualidadPct)}</Text>
             <Text style={styles.statLabel}>Puntualidad</Text>
           </View>
         </View>
 
         <View style={styles.recordsHeading}>
-          <Text style={styles.recordsHeadingStrong}>Esta semana</Text>
-          <Text style={styles.recordsHeadingLight}>{records.length} registros</Text>
+          <Text style={styles.recordsHeadingStrong}>Registros del mes</Text>
+          <Text style={styles.recordsHeadingLight}>
+            {registros.length} {registros.length === 1 ? "registro" : "registros"}
+          </Text>
         </View>
 
-        <FlatList
-          data={records}
-          keyExtractor={(item) => item.day}
-          contentContainerStyle={{ gap: 8, paddingBottom: 90 }}
-          renderItem={({ item }) => (
-            <View style={styles.recordCard}>
-              <View style={styles.recordDate}>
-                <Text style={styles.recordDay}>{item.day}</Text>
-                <Text style={styles.recordDow}>{item.dow}</Text>
-              </View>
-              <View style={styles.recordInfo}>
-                <View>
-                  <Text style={styles.recordInfoLabel}>Entrada</Text>
-                  <Text style={styles.recordInfoValue}>{item.entry}</Text>
+        {cargando ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
+        ) : error ? (
+          <View style={{ alignItems: "center", marginTop: 30, gap: 12 }}>
+            <Text style={[styles.message, { marginTop: 0 }]}>{error}</Text>
+            <Pressable style={styles.retry} onPress={() => setIntento(intento + 1)}>
+              <Text style={styles.retryText}>Reintentar</Text>
+            </Pressable>
+          </View>
+        ) : registros.length === 0 ? (
+          <Text style={styles.message}>Sin registros en {etiquetaMes(mes)}.</Text>
+        ) : (
+          <FlatList
+            data={registros}
+            keyExtractor={(item) => item.fecha}
+            contentContainerStyle={{ gap: 8, paddingBottom: 90 }}
+            renderItem={({ item }) => {
+              const bien = item.puntualidad === "a_tiempo";
+              const total =
+                item.minutosTotales != null
+                  ? formatearMinutos(item.minutosTotales)
+                  : item.estado === "activa"
+                    ? "En curso"
+                    : "Sin salida";
+              return (
+                <View style={styles.recordCard}>
+                  <View style={styles.recordDate}>
+                    <Text style={styles.recordDay}>{item.dia}</Text>
+                    <Text style={styles.recordDow}>{item.diaSemana}</Text>
+                  </View>
+                  <View style={styles.recordInfo}>
+                    <View>
+                      <Text style={styles.recordInfoLabel}>Entrada</Text>
+                      <Text style={styles.recordInfoValue}>{item.horaEntrada}</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.recordInfoLabel}>Salida</Text>
+                      <Text style={styles.recordInfoValue}>{item.horaSalida ?? "— —"}</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.recordInfoLabel}>Total</Text>
+                      <Text style={styles.recordInfoValue}>{total}</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.statusBadge, bien ? styles.statusGood : styles.statusLate]}>
+                    <Text style={[styles.statusBadgeText, bien ? styles.statusGoodText : styles.statusLateText]}>
+                      {bien ? "A tiempo" : "Retardo"}
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.recordInfoLabel}>Salida</Text>
-                  <Text style={styles.recordInfoValue}>{item.exit}</Text>
-                </View>
-                <View>
-                  <Text style={styles.recordInfoLabel}>Total</Text>
-                  <Text style={styles.recordInfoValue}>{item.hours}</Text>
-                </View>
-              </View>
-              <View style={[styles.statusBadge, item.good ? styles.statusGood : styles.statusLate]}>
-                <Text style={[styles.statusBadgeText, item.good ? styles.statusGoodText : styles.statusLateText]}>
-                  {item.status}
-                </Text>
-              </View>
-            </View>
-          )}
-        />
+              );
+            }}
+          />
+        )}
       </View>
       <BottomNav go={go} screen="history" />
     </SafeAreaView>
@@ -97,16 +153,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingBottom: 20 },
   eyebrow: { fontSize: 9, fontWeight: "700", letterSpacing: 1.3, color: "#277277" },
   title: { fontSize: 24, fontWeight: "700", color: "#11213b", letterSpacing: -0.5 },
-  iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#e2e8ed",
-    backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   monthSelector: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -115,6 +161,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#edf0f2",
   },
+  message: { marginTop: 30, textAlign: "center", fontSize: 12, color: "#7f8a98" },
+  retry: { paddingVertical: 9, paddingHorizontal: 18, borderRadius: 12, backgroundColor: colors.primary },
+  retryText: { fontSize: 12, fontWeight: "700", color: colors.white },
   monthArrow: { fontSize: 25, color: "#7d8995" },
   monthLabel: { fontSize: 13, fontWeight: "700", color: "#2d394c" },
   monthStats: {

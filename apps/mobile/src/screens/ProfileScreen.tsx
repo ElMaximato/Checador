@@ -1,22 +1,78 @@
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon, type IconName } from "../components/Icon";
 import { BottomNav } from "../components/BottomNav";
 import { colors } from "../theme/colors";
+import { ApiError, desvincularDispositivo, obtenerPerfil, type Perfil } from "../api/client";
+import { borrarToken } from "../api/session";
 import type { GoFn } from "../navigation/types";
 
-// TODO backend: GET /api/empleados/me — nombre, puesto, avatar,
-// departamento y horario asignado.
-const portrait =
-  "https://images.unsplash.com/photo-1758600587839-56ba05596c69?crop=faces&cs=tinysrgb&fit=crop&fm=jpg&h=900&q=85&w=700";
-
-const rows: { icon: IconName; label: string; value: string }[] = [
-  { icon: "id", label: "ID de empleado", value: "NX-2847" },
-  { icon: "building", label: "Departamento", value: "Operaciones" },
-  { icon: "clock", label: "Horario asignado", value: "09:00 – 18:00" },
-];
+function iniciales(nombre: string) {
+  return nombre
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join("");
+}
 
 export function ProfileScreen({ go }: { go: GoFn }) {
+  const [perfil, setPerfil] = useState<Perfil | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [menuSesion, setMenuSesion] = useState(false);
+
+  const cargar = () => {
+    setCargando(true);
+    setError(null);
+    obtenerPerfil()
+      .then(setPerfil)
+      .catch((e) => setError(e?.message ?? "No se pudo cargar tu perfil"))
+      .finally(() => setCargando(false));
+  };
+
+  useEffect(cargar, []);
+
+  // Cerrar sesión: solo bloquea la app (vuelve al candado biométrico).
+  const cerrarSesion = () => {
+    setMenuSesion(false);
+    go("login");
+  };
+
+  // Desvincular: revoca este teléfono en el servidor y borra la activación
+  // local. Para volver a usar la app hace falta un PIN nuevo de RH.
+  const confirmarDesvincular = () => {
+    setMenuSesion(false);
+    Alert.alert(
+      "¿Desvincular este celular?",
+      "Se quitará este teléfono de tu cuenta y la app volverá a la pantalla de activación. Para usarla otra vez necesitarás un PIN nuevo de RH.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Desvincular", style: "destructive", onPress: desvincular },
+      ]
+    );
+  };
+
+  const desvincular = async () => {
+    try {
+      await desvincularDispositivo();
+      await borrarToken();
+      go("activation");
+    } catch (e: any) {
+      // 401: el cliente API ya borró el token y mandó a Activación.
+      if (e instanceof ApiError && e.status === 401) return;
+      Alert.alert("No se pudo desvincular", e?.message ?? "Inténtalo de nuevo.");
+    }
+  };
+
+  const rows: { icon: IconName; label: string; value: string }[] = perfil
+    ? [
+        { icon: "id", label: "ID de empleado", value: perfil.codigo },
+        { icon: "building", label: "Departamento", value: perfil.departamento },
+      ]
+    : [];
+
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <View style={styles.content}>
@@ -27,57 +83,89 @@ export function ProfileScreen({ go }: { go: GoFn }) {
           </View>
         </View>
 
-        <View style={styles.hero}>
-          <View style={styles.avatarWrap}>
-            <Image source={{ uri: portrait }} style={styles.avatar} />
-            <View style={styles.avatarDot} />
+        {cargando ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+        ) : error || !perfil ? (
+          <View style={{ alignItems: "center", marginTop: 40, gap: 12 }}>
+            <Text style={styles.message}>{error ?? "No se pudo cargar tu perfil"}</Text>
+            <Pressable style={styles.retry} onPress={cargar}>
+              <Text style={styles.retryText}>Reintentar</Text>
+            </Pressable>
           </View>
-          <Text style={styles.name}>Mariana Torres</Text>
-          <Text style={styles.role}>Coordinadora de Operaciones</Text>
-          <View style={styles.activeBadge}>
-            <View style={styles.activeDot} />
-            <Text style={styles.activeBadgeText}>Empleado activo</Text>
-          </View>
-        </View>
-
-        <View style={styles.details}>
-          <Text style={styles.sectionLabel}>INFORMACIÓN LABORAL</Text>
-          {rows.map((row, i) => (
-            <View key={row.label} style={[styles.row, i === rows.length - 1 && { borderBottomWidth: 0 }]}>
-              <View style={styles.rowIcon}>
-                <Icon name={row.icon} size={19} color="#247479" />
+        ) : (
+          <>
+            <View style={styles.hero}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{iniciales(perfil.nombre)}</Text>
               </View>
-              <View>
-                <Text style={styles.rowLabel}>{row.label}</Text>
-                <Text style={styles.rowValue}>{row.value}</Text>
-              </View>
+              <Text style={styles.name}>{perfil.nombre}</Text>
+              <Text style={styles.role}>{perfil.puesto}</Text>
+              {perfil.estado === "activo" && (
+                <View style={styles.activeBadge}>
+                  <View style={styles.activeDot} />
+                  <Text style={styles.activeBadgeText}>Empleado activo</Text>
+                </View>
+              )}
             </View>
-          ))}
-        </View>
 
-        <View style={styles.settingsList}>
-          <Pressable style={styles.settingsRow}>
-            <View style={styles.settingsRowLeft}>
-              <Icon name="bell" size={19} color="#28757a" />
-              <Text style={styles.settingsRowText}>Notificaciones</Text>
+            <View style={styles.details}>
+              {rows.map((row, i) => (
+                <View key={row.label} style={[styles.row, i === rows.length - 1 && { borderBottomWidth: 0 }]}>
+                  <View style={styles.rowIcon}>
+                    <Icon name={row.icon} size={19} color="#247479" />
+                  </View>
+                  <View>
+                    <Text style={styles.rowLabel}>{row.label}</Text>
+                    <Text style={styles.rowValue}>{row.value}</Text>
+                  </View>
+                </View>
+              ))}
             </View>
-            <Icon name="chevron" size={17} color="#3c495c" />
-          </Pressable>
-          <Pressable style={styles.settingsRow}>
-            <View style={styles.settingsRowLeft}>
-              <Icon name="shield" size={19} color="#28757a" />
-              <Text style={styles.settingsRowText}>Privacidad y seguridad</Text>
+
+            <View style={styles.settingsList}>
+              <Pressable style={[styles.settingsRow, { borderBottomWidth: 0 }]} onPress={() => setMenuSesion(true)}>
+                <View style={styles.settingsRowLeft}>
+                  <Icon name="logout" size={19} color={colors.danger} />
+                  <Text style={[styles.settingsRowText, { color: colors.danger }]}>Cerrar sesión</Text>
+                </View>
+              </Pressable>
             </View>
-            <Icon name="chevron" size={17} color="#3c495c" />
-          </Pressable>
-          <Pressable style={[styles.settingsRow, { borderBottomWidth: 0 }]} onPress={() => go("login")}>
-            <View style={styles.settingsRowLeft}>
-              <Icon name="logout" size={19} color={colors.danger} />
-              <Text style={[styles.settingsRowText, { color: colors.danger }]}>Cerrar sesión</Text>
-            </View>
-          </Pressable>
-        </View>
+          </>
+        )}
       </View>
+      <Modal visible={menuSesion} transparent animationType="fade" onRequestClose={() => setMenuSesion(false)}>
+        <Pressable style={styles.overlay} onPress={() => setMenuSesion(false)}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>Sesión</Text>
+
+            <Pressable style={styles.option} onPress={cerrarSesion}>
+              <View style={styles.optionIcon}>
+                <Icon name="lock" size={19} color="#247479" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.optionTitle}>Cerrar sesión</Text>
+                <Text style={styles.optionText}>Bloquea la app. Vuelves a entrar con tu huella o rostro.</Text>
+              </View>
+            </Pressable>
+
+            <Pressable style={styles.option} onPress={confirmarDesvincular}>
+              <View style={[styles.optionIcon, { backgroundColor: colors.warningBg }]}>
+                <Icon name="logout" size={19} color={colors.danger} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.optionTitle, { color: colors.danger }]}>Desvincular celular</Text>
+                <Text style={styles.optionText}>
+                  Quita este teléfono de tu cuenta. Necesitarás un PIN nuevo de RH para volver a activarlo.
+                </Text>
+              </View>
+            </Pressable>
+
+            <Pressable style={styles.cancel} onPress={() => setMenuSesion(false)}>
+              <Text style={styles.cancelText}>Cancelar</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
       <BottomNav go={go} screen="profile" />
     </SafeAreaView>
   );
@@ -89,20 +177,20 @@ const styles = StyleSheet.create({
   header: { paddingBottom: 8 },
   eyebrow: { fontSize: 9, fontWeight: "700", letterSpacing: 1.3, color: "#277277" },
   title: { fontSize: 24, fontWeight: "700", color: "#11213b", letterSpacing: -0.5 },
+  message: { fontSize: 12, color: "#7f8a98", textAlign: "center" },
+  retry: { paddingVertical: 9, paddingHorizontal: 18, borderRadius: 12, backgroundColor: colors.primary },
+  retryText: { fontSize: 12, fontWeight: "700", color: colors.white },
   hero: { alignItems: "center", paddingVertical: 16 },
-  avatarWrap: { width: 88, height: 88, marginBottom: 12 },
-  avatar: { width: 88, height: 88, borderRadius: 44, borderWidth: 4, borderColor: colors.white },
-  avatarDot: {
-    position: "absolute",
-    right: 3,
-    bottom: 5,
-    width: 17,
-    height: 17,
-    borderRadius: 9,
-    backgroundColor: "#3aaa77",
-    borderWidth: 3,
-    borderColor: colors.white,
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    marginBottom: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primaryLight,
   },
+  avatarText: { fontSize: 26, fontWeight: "700", color: colors.primary },
   name: { fontSize: 20, fontWeight: "700", color: "#19273e" },
   role: { marginTop: 2, fontSize: 12, color: "#7f8a98" },
   activeBadge: {
@@ -124,7 +212,6 @@ const styles = StyleSheet.create({
     borderColor: "#e6ebee",
     backgroundColor: colors.white,
   },
-  sectionLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 1.3, color: "#277277", marginBottom: 4 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -143,6 +230,36 @@ const styles = StyleSheet.create({
   },
   rowLabel: { fontSize: 9, color: "#98a1ab" },
   rowValue: { marginTop: 1, fontSize: 12, fontWeight: "700", color: "#344154" },
+  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,33,59,0.45)" },
+  sheet: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: colors.white,
+  },
+  sheetTitle: { fontSize: 16, fontWeight: "700", color: "#19273e", marginBottom: 6 },
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#edf0f2",
+  },
+  optionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#e9f3f3",
+  },
+  optionTitle: { fontSize: 13, fontWeight: "700", color: "#344154" },
+  optionText: { marginTop: 2, fontSize: 11, lineHeight: 15, color: "#7f8a98" },
+  cancel: { marginTop: 14, paddingVertical: 13, borderRadius: 14, alignItems: "center", backgroundColor: "#f1f5f6" },
+  cancelText: { fontSize: 13, fontWeight: "700", color: "#536273" },
   settingsList: {
     marginTop: 13,
     borderRadius: 18,

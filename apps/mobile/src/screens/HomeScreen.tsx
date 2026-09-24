@@ -4,39 +4,95 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "../components/Icon";
 import { BottomNav } from "../components/BottomNav";
 import { colors } from "../theme/colors";
-import { obtenerJornadaHoy, type JornadaHoy } from "../api/client";
+import { obtenerHistorial, obtenerJornadaHoy, obtenerPerfil, type JornadaHoy, type Perfil } from "../api/client";
+import { formatearMinutos, mesActual, porcentaje } from "../utils/format";
 import type { GoFn } from "../navigation/types";
 
-// TODO backend: nombre y resumen mensual aún vienen de mock; la
-// jornada de hoy (entrada/salida real) ya se consulta a la API.
+function saludo(hora: number) {
+  if (hora < 12) return "Buenos días,";
+  if (hora < 19) return "Buenas tardes,";
+  return "Buenas noches,";
+}
+
+type EstadoHome = "cargando" | "error" | "entrada" | "salida" | "completada" | "expirada";
+
+// [texto pequeño del botón, texto principal del botón, texto de la píldora]
+const TEXTOS: Record<EstadoHome, [string, string, string]> = {
+  cargando: ["CONSULTANDO", "Cargando…", "Consultando…"],
+  error: ["SIN CONEXIÓN", "No disponible", "Sin conexión"],
+  entrada: ["REGISTRO DISPONIBLE", "Registrar entrada", "Sin registrar hoy"],
+  salida: ["REGISTRO DISPONIBLE", "Registrar salida", "Jornada activa"],
+  completada: ["HASTA MAÑANA", "Jornada completada", "Jornada cerrada"],
+  expirada: ["CONTACTA A RH", "Sin salida registrada", "Jornada expirada"],
+};
+
 export function HomeScreen({ go }: { go: GoFn }) {
   const [now, setNow] = useState(new Date());
   const [jornada, setJornada] = useState<JornadaHoy>(null);
+  const [cargadoEn, setCargadoEn] = useState(Date.now());
   const [cargando, setCargando] = useState(true);
+  const [errorConexion, setErrorConexion] = useState(false);
+  const [perfil, setPerfil] = useState<Perfil | null>(null);
+  const [asistenciaPct, setAsistenciaPct] = useState<number | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(t);
   }, []);
 
-  const cargarJornada = useCallback(() => {
+  const cargar = useCallback(() => {
     setCargando(true);
+    setErrorConexion(false);
     obtenerJornadaHoy()
-      .then(setJornada)
-      .catch(() => setJornada(null))
+      .then((j) => {
+        setJornada(j);
+        setCargadoEn(Date.now());
+      })
+      .catch(() => {
+        // Sin respuesta del servidor NO se puede asumir "sin registro":
+        // se bloquea el botón y se ofrece reintentar.
+        setJornada(null);
+        setErrorConexion(true);
+      })
       .finally(() => setCargando(false));
+
+    // Nombre, turno y asistencia del mes: datos reales del backend.
+    obtenerPerfil().then(setPerfil).catch(() => {});
+    obtenerHistorial(mesActual())
+      .then((h) => setAsistenciaPct(h.resumen.asistenciaPct))
+      .catch(() => {});
   }, []);
 
   // Home se desmonta y se vuelve a montar cada vez que se navega de
   // regreso a ella (la navegación de App.tsx es por estado), así que
-  // este efecto refresca la jornada automáticamente cada vez.
+  // este efecto refresca todo automáticamente cada vez.
   useEffect(() => {
-    cargarJornada();
-  }, [cargarJornada]);
+    cargar();
+  }, [cargar]);
 
-  const siguienteTipo: "entrada" | "salida" =
-    !jornada || jornada.estado !== "activa" ? "entrada" : "salida";
-  const puedeRegistrar = !cargando && (!jornada || jornada.estado === "activa");
+  const estado: EstadoHome = cargando
+    ? "cargando"
+    : errorConexion
+      ? "error"
+      : !jornada
+        ? "entrada"
+        : jornada.estado === "activa"
+          ? "salida"
+          : jornada.estado === "cerrada"
+            ? "completada"
+            : "expirada";
+  const puedeRegistrar = estado === "entrada" || estado === "salida";
+  const alerta = estado === "error" || estado === "expirada";
+  const [textoChico, textoGrande, textoPildora] = TEXTOS[estado];
+
+  // Tiempo trabajado hoy: el backend da el valor al consultar y, si la
+  // jornada sigue activa, se le suma el tiempo transcurrido desde entonces.
+  const minutosHoy =
+    jornada?.minutosTrabajados == null
+      ? null
+      : jornada.estado === "activa"
+        ? jornada.minutosTrabajados + Math.max(0, Math.floor((now.getTime() - cargadoEn) / 60_000))
+        : jornada.minutosTrabajados;
 
   const date = now.toLocaleDateString("es-MX", {
     weekday: "long",
@@ -54,38 +110,36 @@ export function HomeScreen({ go }: { go: GoFn }) {
       <View style={styles.content}>
         <View style={styles.topHeader}>
           <View>
-            <Text style={styles.greeting}>Buenos días,</Text>
-            <Text style={styles.heading}>Mariana</Text>
+            <Text style={styles.greeting}>{saludo(now.getHours())}</Text>
+            <Text style={styles.heading}>{perfil ? perfil.nombre.split(" ")[0] : " "}</Text>
           </View>
-          <Pressable style={styles.iconButton}>
-            <Icon name="bell" size={20} color="#3e4a5c" />
-            <View style={styles.notificationDot} />
-          </Pressable>
         </View>
 
         <View style={styles.timeHero}>
-          <View style={styles.statusPill}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusPillText}>
-              {jornada?.estado === "activa" ? "Jornada activa" : jornada ? "Jornada cerrada" : "Sin registrar hoy"}
-            </Text>
+          <View style={[styles.statusPill, alerta && { backgroundColor: colors.warningBg }]}>
+            <View style={[styles.statusDot, alerta && { backgroundColor: colors.warning }]} />
+            <Text style={[styles.statusPillText, alerta && { color: colors.warning }]}>{textoPildora}</Text>
           </View>
           <Text style={styles.heroTime}>{time}</Text>
           <Text style={styles.heroDate}>{date}</Text>
-          <View style={styles.officeRow}>
-            <Icon name="map" size={16} color="#26767a" />
-            <Text style={styles.officeText}>Oficina Central · Monterrey</Text>
-          </View>
         </View>
+
+        {errorConexion && (
+          <Pressable style={styles.retryBanner} onPress={cargar}>
+            <Text style={styles.retryText}>No se pudo conectar con el servidor. Toca para reintentar.</Text>
+          </Pressable>
+        )}
 
         <View style={styles.shiftCard}>
           <View style={styles.shiftCardHeader}>
             <View>
               <Text style={styles.cardLabel}>TU JORNADA DE HOY</Text>
-              <Text style={styles.shiftTitle}>Turno administrativo</Text>
+              <Text style={styles.shiftTitle}>{perfil?.horario.nombre ?? " "}</Text>
             </View>
             <View style={styles.scheduleBadge}>
-              <Text style={styles.scheduleBadgeText}>09:00 – 18:00</Text>
+              <Text style={styles.scheduleBadgeText}>
+                {perfil ? `${perfil.horario.horaEntrada} – ${perfil.horario.horaSalida}` : "— —"}
+              </Text>
             </View>
           </View>
 
@@ -111,18 +165,14 @@ export function HomeScreen({ go }: { go: GoFn }) {
         <Pressable
           style={[styles.primaryAction, !puedeRegistrar && { opacity: 0.5 }]}
           disabled={!puedeRegistrar}
-          onPress={() => go("fingerprint", { tipo: siguienteTipo })}
+          onPress={() => go("fingerprint", { tipo: estado === "salida" ? "salida" : "entrada" })}
         >
           <View style={styles.actionIcon}>
             <Icon name="fingerprint" size={29} color={colors.white} />
           </View>
           <View>
-            <Text style={styles.actionSmall}>
-              {jornada?.estado === "expirada_sin_salida" ? "JORNADA EXPIRADA" : "REGISTRO DISPONIBLE"}
-            </Text>
-            <Text style={styles.actionStrong}>
-              {siguienteTipo === "entrada" ? "Registrar entrada" : "Registrar salida"}
-            </Text>
+            <Text style={styles.actionSmall}>{textoChico}</Text>
+            <Text style={styles.actionStrong}>{textoGrande}</Text>
           </View>
           <Icon name="chevron" size={22} color={colors.white} />
         </Pressable>
@@ -133,7 +183,7 @@ export function HomeScreen({ go }: { go: GoFn }) {
               <Icon name="clock" size={18} color="#24745b" />
             </View>
             <View>
-              <Text style={styles.summaryStrong}>7 h 32 min</Text>
+              <Text style={styles.summaryStrong}>{formatearMinutos(minutosHoy)}</Text>
               <Text style={styles.summarySmall}>Tiempo trabajado</Text>
             </View>
           </View>
@@ -142,7 +192,7 @@ export function HomeScreen({ go }: { go: GoFn }) {
               <Icon name="calendar" size={18} color={colors.infoBlue} />
             </View>
             <View>
-              <Text style={styles.summaryStrong}>100%</Text>
+              <Text style={styles.summaryStrong}>{porcentaje(asistenciaPct)}</Text>
               <Text style={styles.summarySmall}>Asistencia mensual</Text>
             </View>
           </View>
@@ -159,25 +209,6 @@ const styles = StyleSheet.create({
   topHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   greeting: { fontSize: 14, color: colors.textMuted },
   heading: { fontSize: 24, fontWeight: "700", color: "#11213b", letterSpacing: -0.5 },
-  iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#e2e8ed",
-    backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  notificationDot: {
-    position: "absolute",
-    top: 9,
-    right: 9,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#e26351",
-  },
   timeHero: { alignItems: "center", paddingVertical: 25 },
   statusPill: {
     flexDirection: "row",
@@ -192,8 +223,14 @@ const styles = StyleSheet.create({
   statusPillText: { fontSize: 11, fontWeight: "700", color: "#39745d" },
   heroTime: { marginTop: 11, fontSize: 53, fontWeight: "700", color: "#10203a", letterSpacing: -2.5 },
   heroDate: { marginTop: 8, fontSize: 14, color: "#6e7a8b", textTransform: "capitalize" },
-  officeRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 },
-  officeText: { fontSize: 11, color: "#8a95a2" },
+  retryBanner: {
+    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: colors.warningBg,
+  },
+  retryText: { fontSize: 11, fontWeight: "600", color: colors.warning, textAlign: "center" },
   shiftCard: {
     borderWidth: 1,
     borderColor: colors.border,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Alert, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { ActivationScreen } from "./src/screens/ActivationScreen";
@@ -11,6 +11,7 @@ import { ConfirmationScreen } from "./src/screens/ConfirmationScreen";
 import { HistoryScreen } from "./src/screens/HistoryScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { obtenerToken } from "./src/api/session";
+import { registrarManejadorSesionInvalida } from "./src/api/client";
 import { colors } from "./src/theme/colors";
 import type { NavParams, Screen } from "./src/navigation/types";
 
@@ -27,6 +28,20 @@ export default function App() {
       // Sin token -> primera vez, o dispositivo revocado -> Activación.
       setScreen(token ? "login" : "activation");
     });
+  }, []);
+
+  // Si el backend rechaza el token (RH revocó el dispositivo, o se
+  // desvinculó), el cliente API ya borró el token: mandar a Activación.
+  useEffect(() => {
+    registrarManejadorSesionInvalida(() => {
+      setParams({});
+      setScreen("activation");
+      Alert.alert(
+        "Sesión finalizada",
+        "Este teléfono ya no está vinculado a tu cuenta. Pide a RH un PIN nuevo para activarlo de nuevo."
+      );
+    });
+    return () => registrarManejadorSesionInvalida(null);
   }, []);
 
   const go = (next: Screen, nextParams: NavParams = {}) => {

@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const pool = require("../config/db");
 const { firmarTokenDispositivo } = require("../utils/tokens");
+const { codigoDesdeId, idDesdeCodigo } = require("../utils/codigoEmpleado");
 
 // Llamado por el Admin Web al dar de alta a un empleado (o al
 // reemplazar su teléfono). Genera un PIN de un solo uso.
@@ -26,15 +27,20 @@ async function generarPin(req, res) {
   );
 
   // El PIN en claro solo se devuelve aquí, una vez, para que RH lo
-  // comparta con el empleado. Nunca se vuelve a poder consultar.
-  res.json({ dispositivoRegistroId: result.insertId, pin });
+  // comparta con el empleado (junto con su ID, ej. NX-1001). Nunca se
+  // vuelve a poder consultar.
+  res.json({ dispositivoRegistroId: result.insertId, codigo: codigoDesdeId(empleadoId), pin });
 }
 
 // Llamado por la app móvil la primera vez que el empleado la abre.
 async function activarDispositivo(req, res) {
-  const { empleadoId, pin, deviceId, deviceInfo } = req.body;
-  if (!empleadoId || !pin || !deviceId) {
-    return res.status(400).json({ error: "empleadoId, pin y deviceId son requeridos" });
+  const { codigo, pin, deviceId, deviceInfo } = req.body;
+  const empleadoId = idDesdeCodigo(codigo);
+  if (!empleadoId) {
+    return res.status(400).json({ error: "ID de empleado inválido. Ejemplo: NX-1001" });
+  }
+  if (!pin || !deviceId) {
+    return res.status(400).json({ error: "pin y deviceId son requeridos" });
   }
 
   const [rows] = await pool.query(
@@ -58,4 +64,17 @@ async function activarDispositivo(req, res) {
   res.json({ token });
 }
 
-module.exports = { generarPin, activarDispositivo };
+// Llamado por la app móvil cuando el empleado elige "Desvincular celular".
+// Revoca este dispositivo: el token deja de servir de inmediato y para
+// volver a usar la app hace falta que RH genere un PIN nuevo.
+async function desvincularDispositivo(req, res) {
+  await pool.query(
+    `UPDATE dispositivos_empleado
+     SET activo = FALSE, fecha_revocacion = NOW(), refresh_token_hash = NULL
+     WHERE id = ?`,
+    [req.dispositivoId]
+  );
+  res.json({ ok: true });
+}
+
+module.exports = { generarPin, activarDispositivo, desvincularDispositivo };

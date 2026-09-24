@@ -1,9 +1,30 @@
 const pool = require("../config/db");
 const { firmarTokenJornada } = require("../utils/tokens");
 
-function hoyISO() {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+// Fecha LOCAL del servidor en formato YYYY-MM-DD.
+// (No usar toISOString(): devuelve la fecha en UTC y el "día" cambiaba
+// a las 5 pm en Sonora, guardando jornadas con la fecha del día siguiente.)
+function fechaISO(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dia}`;
 }
+
+function hoyISO() {
+  return fechaISO(new Date());
+}
+
+// La BD devuelve los DATETIME como texto ("2026-09-23 19:56:05", hora local).
+function parseDT(valor) {
+  return new Date(String(valor).replace(" ", "T"));
+}
+
+function hhmm(valor) {
+  return parseDT(valor).toTimeString().slice(0, 5);
+}
+
+const DIAS_CORTOS = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
 
 function sumarMinutos(hora, minutos) {
   const [h, m, s] = hora.split(":").map(Number);
@@ -146,7 +167,8 @@ function toSeconds(hhmmss) {
 
 // GET /api/attendance/hoy — estado de la jornada de hoy del empleado
 // (o null si aún no ha checado entrada). El móvil lo usa para decidir
-// si mostrar "Registrar entrada" o "Registrar salida".
+// si mostrar "Registrar entrada" o "Registrar salida", y para el
+// tiempo trabajado del día.
 async function obtenerJornadaHoy(req, res) {
   const empleadoId = req.empleadoId;
   const fecha = hoyISO();
@@ -158,14 +180,104 @@ async function obtenerJornadaHoy(req, res) {
   const jornada = rows[0];
   if (!jornada) return res.json({ jornada: null });
 
+  const entrada = parseDT(jornada.hora_entrada);
+  let minutosTrabajados = null;
+  if (jornada.hora_salida) {
+    minutosTrabajados = Math.max(0, Math.round((parseDT(jornada.hora_salida) - entrada) / 60_000));
+  } else if (jornada.estado === "activa") {
+    minutosTrabajados = Math.max(0, Math.floor((Date.now() - entrada) / 60_000));
+  }
+
   res.json({
     jornada: {
       estado: jornada.estado,
       puntualidad: jornada.puntualidad,
-      horaEntrada: new Date(jornada.hora_entrada).toTimeString().slice(0, 5),
-      horaSalida: jornada.hora_salida ? new Date(jornada.hora_salida).toTimeString().slice(0, 5) : null,
+      horaEntrada: hhmm(jornada.hora_entrada),
+      horaSalida: jornada.hora_salida ? hhmm(jornada.hora_salida) : null,
+      minutosTrabajados,
     },
   });
 }
 
-module.exports = { registrarEntrada, registrarSalida, obtenerJornadaHoy };
+// GET /api/attendance/historial?mes=YYYY-MM
+// Registros del mes del empleado + resumen (días laborados, horas,
+// puntualidad y asistencia). Sin ?mes= usa el mes actual.
+async function obtenerHistorial(req, res) {
+  const empleadoId = req.empleadoId;
+  const hoy = hoyISO();
+  const mes = /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.mes || "") ? req.query.mes : hoy.slice(0, 7);
+
+  const [anio, mesNum] = mes.split("-").map(Number);
+  const ultimoDia = new Date(anio, mesNum, 0).getDate();
+  const desde = `${mes}-01`;
+  const hasta = `${mes}-${String(ultimoDia).padStart(2, "0")}`;
+
+  const [rows] = await pool.query(
+    `SELECT fecha, hora_entrada, hora_salida, estado, puntualidad
+     FROM jornadas
+     WHERE empleado_id = ? AND fecha BETWEEN ? AND ?
+     ORDER BY fecha DESC`,
+    [empleadoId, desde, hasta]
+  );
+
+  const registros = rows.map((j) => {
+    const [y, m, d] = j.fecha.split("-").map(Number);
+    const entrada = parseDT(j.hora_entrada);
+    const salida = j.hora_salida ? parseDT(j.hora_salida) : null;
+    return {
+      fecha: j.fecha,
+      dia: String(d).padStart(2, "0"),
+      diaSemana: DIAS_CORTOS[new Date(y, m - 1, d).getDay()],
+      horaEntrada: hhmm(j.hora_entrada),
+      horaSalida: salida ? hhmm(j.hora_salida) : null,
+      minutosTotales: salida ? Math.max(0, Math.round((salida - entrada) / 60_000)) : null,
+      puntualidad: j.puntualidad,
+      estado: j.estado,
+    };
+  });
+
+  // Días que le correspondía trabajar en el mes, hasta hoy (o hasta el
+  // fin de mes si ya pasó), a partir de su fecha de ingreso. El día de
+  // hoy solo cuenta si ya checó, para no penalizar antes de que llegue.
+  const [diasRows] = await pool.query(
+    `SELECT hd.dia_semana, e.fecha_ingreso
+     FROM empleados e
+     JOIN horarios_dias hd ON hd.horario_id = e.horario_id
+     WHERE e.id = ?`,
+    [empleadoId]
+  );
+  const diasProgramados = new Set(diasRows.map((r) => r.dia_semana));
+  const fechaIngreso = diasRows[0]?.fecha_ingreso || null;
+
+  const inicio = fechaIngreso && fechaIngreso > desde ? fechaIngreso : desde;
+  const fin = hasta < hoy ? hasta : hoy;
+  const fechasConJornada = new Set(registros.map((r) => r.fecha));
+
+  let diasEsperados = 0;
+  if (inicio <= fin) {
+    const cursor = new Date(Number(inicio.slice(0, 4)), Number(inicio.slice(5, 7)) - 1, Number(inicio.slice(8, 10)));
+    while (fechaISO(cursor) <= fin) {
+      const f = fechaISO(cursor);
+      const dow = cursor.getDay() === 0 ? 7 : cursor.getDay();
+      if (diasProgramados.has(dow) && (f !== hoy || fechasConJornada.has(f))) diasEsperados++;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  const minutosTotales = registros.reduce((acc, r) => acc + (r.minutosTotales || 0), 0);
+  const aTiempo = registros.filter((r) => r.puntualidad === "a_tiempo").length;
+
+  res.json({
+    mes,
+    resumen: {
+      diasLaborados: registros.length,
+      minutosTotales,
+      puntualidadPct: registros.length ? Math.round((aTiempo / registros.length) * 100) : null,
+      asistenciaPct: diasEsperados > 0 ? Math.min(100, Math.round((registros.length / diasEsperados) * 100)) : null,
+      diasEsperados,
+    },
+    registros,
+  });
+}
+
+module.exports = { registrarEntrada, registrarSalida, obtenerJornadaHoy, obtenerHistorial };

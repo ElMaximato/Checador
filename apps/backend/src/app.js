@@ -4,6 +4,7 @@ const path = require("path");
 
 const authRoutes = require("./routes/auth.routes");
 const attendanceRoutes = require("./routes/attendance.routes");
+const meRoutes = require("./routes/me.routes");
 
 const app = express();
 
@@ -17,5 +18,6 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/me", meRoutes);
 
 module.exports = app;

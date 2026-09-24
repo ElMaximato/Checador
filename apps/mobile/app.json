@@ -17,9 +17,12 @@
         {
           "faceIDPermission": "Permite usar Face ID para verificar tu identidad al checar."
         }
-      ]
+      ],
+      "expo-asset"
     ],
-    "ios": { "supportsTablet": false },
+    "ios": {
+      "supportsTablet": false
+    },
     "android": {}
   }
 }
