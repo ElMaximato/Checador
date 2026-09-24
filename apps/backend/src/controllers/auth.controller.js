@@ -53,12 +53,32 @@ async function activarDispositivo(req, res) {
   const valido = await bcrypt.compare(pin, registro.pin_hash);
   if (!valido) return res.status(401).json({ error: "PIN incorrecto" });
 
-  await pool.query(
-    `UPDATE dispositivos_empleado
-     SET device_id = ?, device_info = ?, pin_usado = TRUE, activo = TRUE, fecha_activacion = NOW()
-     WHERE id = ?`,
-    [deviceId, deviceInfo || null, registro.id]
-  );
+  // Un solo teléfono activo por empleado: al activar el nuevo se revocan
+  // los anteriores (quedan con activo = FALSE y su token deja de servir).
+  // Ambos cambios van en una transacción para que nunca queden dos
+  // activos, ni ninguno, si algo falla a la mitad.
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query(
+      `UPDATE dispositivos_empleado
+       SET device_id = ?, device_info = ?, pin_usado = TRUE, activo = TRUE, fecha_activacion = NOW()
+       WHERE id = ?`,
+      [deviceId, deviceInfo || null, registro.id]
+    );
+    await conn.query(
+      `UPDATE dispositivos_empleado
+       SET activo = FALSE, fecha_revocacion = NOW(), refresh_token_hash = NULL
+       WHERE empleado_id = ? AND id <> ? AND activo = TRUE`,
+      [empleadoId, registro.id]
+    );
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 
   const token = firmarTokenDispositivo({ empleadoId, dispositivoId: registro.id });
   res.json({ token });
