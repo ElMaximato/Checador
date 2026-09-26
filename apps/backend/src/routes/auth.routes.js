@@ -1,9 +1,8 @@
 const router = require("express").Router();
 const { requireDeviceSession } = require("../middleware/auth");
-const { generarPin, activarDispositivo, desvincularDispositivo } = require("../controllers/auth.controller");
+const { activarDispositivo, desvincularDispositivo } = require("../controllers/auth.controller");
 
-// Llamado desde el Admin Web (debe protegerse con auth de admin — ver nota)
-router.post("/dispositivos/:empleadoId/generar-pin", generarPin);
+// (generar PIN ahora vive en /api/admin/empleados/:id/pin, protegido por login de administrador)
 
 // Llamado desde la app móvil, primera vez que se instala
 router.post("/activar", activarDispositivo);
