@@ -20,9 +20,9 @@ type EstadoHome = "cargando" | "error" | "entrada" | "salida" | "completada" | "
 const TEXTOS: Record<EstadoHome, [string, string, string]> = {
   cargando: ["CONSULTANDO", "Cargando…", "Consultando…"],
   error: ["SIN CONEXIÓN", "No disponible", "Sin conexión"],
-  entrada: ["REGISTRO DISPONIBLE", "Registrar entrada", "Sin registrar hoy"],
+  entrada: ["REGISTRO DISPONIBLE", "Registrar entrada", "Sin registrar"],
   salida: ["REGISTRO DISPONIBLE", "Registrar salida", "Jornada activa"],
-  completada: ["HASTA MAÑANA", "Jornada completada", "Jornada cerrada"],
+  completada: ["HASTA TU PRÓXIMO TURNO", "Jornada completada", "Jornada cerrada"],
   expirada: ["CONTACTA A RH", "Sin salida registrada", "Jornada expirada"],
 };
 
@@ -61,6 +61,22 @@ export function HomeScreen({ go }: { go: GoFn }) {
     obtenerHistorial(mesActual())
       .then((h) => setAsistenciaPct(h.resumen.asistenciaPct))
       .catch(() => {});
+  }, []);
+
+  // Refresco silencioso cada 2 min: si la app se queda abierta, el estado se actualiza solo
+  // al cambiar de día o al abrirse la ventana de entrada de un turno nocturno.
+  // Un fallo de red aquí no muestra error: se conserva lo último que se cargó.
+  useEffect(() => {
+    const t = setInterval(() => {
+      obtenerJornadaHoy()
+        .then((j) => {
+          setJornada(j);
+          setCargadoEn(Date.now());
+          setErrorConexion(false);
+        })
+        .catch(() => {});
+    }, 120_000);
+    return () => clearInterval(t);
   }, []);
 
   // Home se desmonta y se vuelve a montar cada vez que se navega de
@@ -133,7 +149,7 @@ export function HomeScreen({ go }: { go: GoFn }) {
         <View style={styles.shiftCard}>
           <View style={styles.shiftCardHeader}>
             <View>
-              <Text style={styles.cardLabel}>TU JORNADA DE HOY</Text>
+              <Text style={styles.cardLabel}>TU JORNADA</Text>
               <Text style={styles.shiftTitle}>{perfil?.horario.nombre ?? " "}</Text>
             </View>
             <View style={styles.scheduleBadge}>
@@ -157,7 +173,9 @@ export function HomeScreen({ go }: { go: GoFn }) {
             </View>
             <View>
               <Text style={styles.shiftLineLabel}>Salida</Text>
-              <Text style={styles.shiftLineValue}>{jornada?.horaSalida ?? "— —"}</Text>
+              <Text style={styles.shiftLineValue}>
+                {jornada?.horaSalida ? `${jornada.horaSalida}${jornada.salidaDiaSiguiente ? " +1" : ""}` : "— —"}
+              </Text>
             </View>
           </View>
         </View>

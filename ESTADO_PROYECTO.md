@@ -83,10 +83,7 @@ node scripts/crearAdmin.js "Nombre" correo@ejemplo.com contraseña
 ### Pendiente en el backend
 
 - [ ] HTTPS y despliegue en un servidor real (hoy corre en local, por HTTP).
-- [ ] CORS está abierto a cualquier origen (`app.use(cors())`); hay que restringirlo antes de exponerlo fuera de la red local.
-- [ ] Turnos que cruzan la medianoche no están soportados (la salida se busca por la fecha de hoy).
-- [ ] No hay límite de intentos (rate limiting) en login ni en activación por PIN.
-- [ ] Alta de administradores solo por script de terminal; no hay pantalla para gestionarlos.
+
 
 ---
 
@@ -165,10 +162,7 @@ VITE_API_URL=http://TU_IP:4000
 
 ### Pendiente en el panel
 
-- [ ] Sin pantalla para dar de alta o gestionar otros administradores (solo por script).
-- [ ] Sin dashboard/reportes (gráficas de asistencia, retardos por departamento, etc.).
-- [ ] Listado de asistencias limitado a 500 registros, sin paginación.
-- [ ] Horarios y Asistencias no tienen aún el mismo nivel de validación de formulario que Empleados.
+
 
 ---
 

@@ -22,4 +22,13 @@ async function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { requireAdmin };
+// El rol se lee de la BD en cada petición (no viene en el JWT), así que un
+// cambio de rol o una desactivación surten efecto de inmediato.
+function requireSuperAdmin(req, res, next) {
+  if (req.admin?.rol !== "super_admin") {
+    return res.status(403).json({ error: "Solo un super administrador puede gestionar administradores" });
+  }
+  next();
+}
+
+module.exports = { requireAdmin, requireSuperAdmin };

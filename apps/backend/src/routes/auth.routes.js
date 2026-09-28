@@ -1,11 +1,13 @@
 const router = require("express").Router();
 const { requireDeviceSession } = require("../middleware/auth");
+const { limitarActivacion } = require("../middleware/limitarIntentos");
 const { activarDispositivo, desvincularDispositivo } = require("../controllers/auth.controller");
 
 // (generar PIN ahora vive en /api/admin/empleados/:id/pin, protegido por login de administrador)
 
-// Llamado desde la app móvil, primera vez que se instala
-router.post("/activar", activarDispositivo);
+// Llamado desde la app móvil, primera vez que se instala.
+// Con límite de intentos fallidos: el PIN tiene solo 6 dígitos.
+router.post("/activar", limitarActivacion, activarDispositivo);
 
 // Llamado desde la app móvil: el empleado desvincula su propio teléfono
 router.post("/desvincular", requireDeviceSession, desvincularDispositivo);

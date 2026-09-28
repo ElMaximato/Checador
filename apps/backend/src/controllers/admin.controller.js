@@ -157,19 +157,54 @@ async function revocarDispositivo(req, res) {
 }
 
 // ---------- Horarios ----------
+const NOMBRE_HORARIO_MAX = 80;
+const HORA_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/; // HH:MM o HH:MM:SS
+const aMinutos = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+// Entero obligatorio dentro de [min, max]. Si el campo no viene (undefined/null)
+// se usa `porDefecto`; un texto vacío o no numérico se rechaza (antes "" pasaba como 0).
+function entero(valor, etiqueta, min, max, porDefecto) {
+  if (valor === undefined || valor === null) return porDefecto;
+  const n = typeof valor === "string" && valor.trim() === "" ? NaN : Number(valor);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw httpError(400, `${etiqueta} debe ser un número entero entre ${min} y ${max}`);
+  }
+  return n;
+}
+
 function leerHorario(b) {
-  if (!b.nombre?.trim() || !b.horaEntrada || !b.horaSalida) throw httpError(400, "Nombre, hora de entrada y de salida son requeridos");
-  const dias = [...new Set((b.dias || []).map(Number).filter((d) => d >= 1 && d <= 7))];
+  const nombre = String(b.nombre ?? "").trim();
+  if (!nombre) throw httpError(400, "El nombre del horario es requerido");
+  if (nombre.length > NOMBRE_HORARIO_MAX) throw httpError(400, `El nombre no puede exceder ${NOMBRE_HORARIO_MAX} caracteres`);
+
+  if (!HORA_RE.test(String(b.horaEntrada ?? ""))) throw httpError(400, "La hora de entrada no es válida (HH:MM)");
+  if (!HORA_RE.test(String(b.horaSalida ?? ""))) throw httpError(400, "La hora de salida no es válida (HH:MM)");
+  const entrada = b.horaEntrada.slice(0, 5);
+  const salida = b.horaSalida.slice(0, 5);
+  const difMin = aMinutos(salida) - aMinutos(entrada);
+  if (difMin === 0) throw httpError(400, "La hora de salida no puede ser igual a la de entrada");
+  // Salida menor que entrada = turno nocturno: cruza la medianoche y termina al día siguiente.
+  const turnoMin = difMin > 0 ? difMin : difMin + 1440;
+
+  const tol = entero(b.toleranciaMinutos, "La tolerancia", 0, 120, 10);
+  const dur = entero(b.duracionJornadaHoras, "La vigencia de la jornada", 1, 24, 10);
+  // El token de jornada vive `dur` horas desde la entrada: si es menor que el turno,
+  // vence antes de la salida y la jornada queda "expirada_sin_salida".
+  const turnoHoras = Math.ceil(turnoMin / 60);
+  if (dur < turnoHoras) {
+    throw httpError(400, `La vigencia de la jornada (${dur} h) debe cubrir el turno (${turnoHoras} h); si no, vence antes de poder registrar la salida`);
+  }
+
+  const dias = [...new Set((Array.isArray(b.dias) ? b.dias : []).map(Number))];
+  if (dias.some((d) => !Number.isInteger(d) || d < 1 || d > 7)) throw httpError(400, "Los días deben ir de 1 (lunes) a 7 (domingo)");
   if (!dias.length) throw httpError(400, "Elige al menos un día");
-  return {
-    nombre: b.nombre.trim(),
-    entrada: b.horaEntrada,
-    salida: b.horaSalida,
-    tol: Number(b.toleranciaMinutos ?? 10),
-    dur: Number(b.duracionJornadaHoras ?? 10),
-    activo: b.activo === false ? 0 : 1,
-    dias,
-  };
+
+  return { nombre, entrada, salida, tol, dur, activo: b.activo === false ? 0 : 1, dias };
+}
+
+async function verificarNombreHorarioLibre(nombre, exceptoId = 0) {
+  const [r] = await pool.query("SELECT id FROM horarios WHERE nombre = ? AND id <> ? LIMIT 1", [nombre, exceptoId]);
+  if (r.length) throw httpError(409, "Ya existe un horario con ese nombre");
 }
 
 async function guardarDias(horarioId, dias) {
@@ -199,6 +234,7 @@ async function listarHorarios(req, res) {
 
 async function crearHorario(req, res) {
   const h = leerHorario(req.body);
+  await verificarNombreHorarioLibre(h.nombre);
   const [r] = await pool.query(
     "INSERT INTO horarios (nombre, hora_entrada, hora_salida, tolerancia_minutos, duracion_jornada_horas, activo) VALUES (?, ?, ?, ?, ?, ?)",
     [h.nombre, h.entrada, h.salida, h.tol, h.dur, h.activo]
@@ -209,6 +245,7 @@ async function crearHorario(req, res) {
 
 async function editarHorario(req, res) {
   const h = leerHorario(req.body);
+  await verificarNombreHorarioLibre(h.nombre, Number(req.params.id) || 0);
   const [r] = await pool.query(
     `UPDATE horarios SET nombre = ?, hora_entrada = ?, hora_salida = ?, tolerancia_minutos = ?,
        duracion_jornada_horas = ?, activo = ? WHERE id = ?`,
@@ -220,33 +257,68 @@ async function editarHorario(req, res) {
 }
 
 // ---------- Asistencias ----------
+const LIMITE_DEFECTO = 50;
+const LIMITE_MAX = 200;
+
+// "YYYY-MM-DD" que además sea una fecha real (rechaza 2026-02-31).
+function fechaValida(s) {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+// Entero >= 1; si no es válido usa `defecto`. Se acota a `max`.
+function enteroPositivo(v, defecto, max = Infinity) {
+  const n = Number.parseInt(v, 10);
+  return Number.isInteger(n) && n >= 1 ? Math.min(n, max) : defecto;
+}
+
+// GET /asistencias?desde&hasta&pagina&limite
+// Responde { filas, total, pagina, limite, paginas }. Si piden una página
+// mayor a la última, devuelve la última (y `pagina` refleja cuál es).
 async function listarAsistencias(req, res) {
-  const re = /^\d{4}-\d{2}-\d{2}$/;
-  const desde = re.test(req.query.desde) ? req.query.desde : fechaISO();
-  const hasta = re.test(req.query.hasta) ? req.query.hasta : desde;
+  const { desde: d, hasta: h } = req.query;
+  if (d !== undefined && !fechaValida(d)) throw httpError(400, "La fecha inicial no es válida (AAAA-MM-DD)");
+  if (h !== undefined && !fechaValida(h)) throw httpError(400, "La fecha final no es válida (AAAA-MM-DD)");
+  const desde = d ?? fechaISO();
+  const hasta = h ?? desde;
+  if (desde > hasta) throw httpError(400, "La fecha inicial no puede ser posterior a la final");
+
+  const limite = enteroPositivo(req.query.limite, LIMITE_DEFECTO, LIMITE_MAX);
+  const [[{ total }]] = await pool.query("SELECT COUNT(*) AS total FROM jornadas WHERE fecha BETWEEN ? AND ?", [desde, hasta]);
+  const paginas = Math.max(1, Math.ceil(total / limite));
+  const pagina = Math.min(enteroPositivo(req.query.pagina, 1), paginas);
+
   const [rows] = await pool.query(
     `SELECT j.id, j.empleado_id, j.fecha, j.hora_entrada, j.hora_salida, j.estado, j.puntualidad,
             j.minutos_retardo, j.foto_entrada_url, j.foto_salida_url, e.nombre
      FROM jornadas j JOIN empleados e ON e.id = j.empleado_id
      WHERE j.fecha BETWEEN ? AND ?
-     ORDER BY j.fecha DESC, j.hora_entrada DESC LIMIT 500`,
-    [desde, hasta]
+     ORDER BY j.fecha DESC, j.hora_entrada DESC, j.id DESC
+     LIMIT ? OFFSET ?`,
+    [desde, hasta, limite, (pagina - 1) * limite]
   );
-  res.json(
-    rows.map((r) => ({
+  res.json({
+    filas: rows.map((r) => ({
       id: r.id,
       fecha: r.fecha,
       codigo: codigoDesdeId(r.empleado_id),
       nombre: r.nombre,
       horaEntrada: hhmmDT(r.hora_entrada),
       horaSalida: hhmmDT(r.hora_salida),
+      salidaDiaSiguiente: !!r.hora_salida && String(r.hora_salida).slice(0, 10) !== String(r.hora_entrada).slice(0, 10),
       estado: r.estado,
       puntualidad: r.puntualidad,
       minutosRetardo: r.minutos_retardo,
       fotoEntrada: r.foto_entrada_url,
       fotoSalida: r.foto_salida_url,
-    }))
-  );
+    })),
+    total,
+    pagina,
+    limite,
+    paginas,
+  });
 }
 
 module.exports = {

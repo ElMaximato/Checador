@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { api, getToken, setAlCerrarSesion } from "./api";
+import { Icono } from "./icons";
+import Dashboard from "./pages/Dashboard";
 import Empleados from "./pages/Empleados";
 import Horarios from "./pages/Horarios";
 import Asistencias from "./pages/Asistencias";
+import Administradores from "./pages/Administradores";
+import "./layout.css";
+import "./animaciones.css";
 
 function Login({ onOk }) {
   const [email, setEmail] = useState("");
@@ -18,6 +23,8 @@ function Login({ onOk }) {
       const r = await api("/login", { method: "POST", body: { email, password } });
       localStorage.setItem("admin_token", r.token);
       localStorage.setItem("admin_nombre", r.admin.nombre);
+      // Solo para decidir qué pestañas mostrar; el backend valida el rol de verdad.
+      localStorage.setItem("admin_rol", r.admin.rol);
       onOk();
     } catch (err) {
       setError(err.message);
@@ -40,37 +47,107 @@ function Login({ onOk }) {
   );
 }
 
-const TABS = [["empleados", "Empleados"], ["horarios", "Horarios"], ["asistencias", "Asistencias"]];
+const TABS_BASE = [
+  ["dashboard", "Dashboard", "inicio"],
+  ["empleados", "Empleados", "usuarios"],
+  ["horarios", "Horarios", "reloj"],
+  ["asistencias", "Asistencias", "calendario"],
+];
+const NOMBRE_ROL = { super_admin: "Super administrador", rh: "Recursos Humanos", supervisor: "Supervisor" };
+
+
+const TABS_VALIDAS = ["dashboard", "empleados", "horarios", "asistencias", "administradores"];
+const tabDesdeHash = () => {
+  const k = window.location.hash.replace(/^#\/?/, "");
+  return TABS_VALIDAS.includes(k) ? k : "dashboard";
+};
 
 export default function App() {
   const [sesion, setSesion] = useState(!!getToken());
-  const [tab, setTab] = useState("empleados");
+  const [tab, setTab] = useState(tabDesdeHash);
+  const [menu, setMenu] = useState(false); // barra lateral abierta (solo en pantallas chicas)
 
-  useEffect(() => setAlCerrarSesion(() => setSesion(false)), []);
+  // Al cerrar sesión se vuelve a la primera pestaña, para que otro usuario
+  // que entre después no caiga en una pantalla que su rol no puede ver.
+  const cerrarSesion = () => {
+    setSesion(false);
+    setMenu(false);
+  };
 
+  useEffect(() => setAlCerrarSesion(cerrarSesion), []);
+
+  useEffect(() => {
+    const alCambiar = () => setTab(tabDesdeHash());
+    window.addEventListener("hashchange", alCambiar);
+    return () => window.removeEventListener("hashchange", alCambiar);
+  }, []);
+
+  // Cierre manual: se limpia la URL para que el siguiente usuario empiece en el dashboard.
   const salir = () => {
     localStorage.removeItem("admin_token");
-    setSesion(false);
+    localStorage.removeItem("admin_rol");
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    setTab("dashboard");
+    cerrarSesion();
   };
+
 
   if (!sesion) return <Login onOk={() => setSesion(true)} />;
 
+  const rol = localStorage.getItem("admin_rol");
+  const tabs = rol === "super_admin" ? [...TABS_BASE, ["administradores", "Administradores", "escudo"]] : TABS_BASE;
+  const tabActiva = tabs.some(([k]) => k === tab) ? tab : "dashboard";
+  const ir = (k) => {
+    window.location.hash = `/${k}`; // dispara hashchange y eso actualiza `tab`
+    setMenu(false);
+  };
+  const fecha = new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
+
   return (
-    <div className="app">
-      <header className="top">
-        <strong>Checador</strong>
+    <div className="shell">
+      <div className="brand"><span>Checa</span>dor</div>
+
+      <header className="topbar">
+        <button className="menu-btn" onClick={() => setMenu(true)} aria-label="Abrir menú"><Icono nombre="menu" tam={24} /></button>
+        <span className="brand-mini"><span>Checa</span>dor</span>
+        <span className="espacio" />
+        <span className="muted fecha">{fecha}</span>
+        <span className="titulo">Panel administrativo</span>
+      </header>
+
+      <div className={menu ? "scrim abierto" : "scrim"} onClick={() => setMenu(false)} />
+      <aside className={menu ? "sidebar abierto" : "sidebar"}>
+        <div className="sb-user">
+          <span className="sb-avatar"><Icono nombre="usuario" tam={22} /></span>
+          <div>
+            <strong>{localStorage.getItem("admin_nombre")}</strong>
+            <small>{NOMBRE_ROL[rol] || ""}</small>
+          </div>
+        </div>
         <nav>
-          {TABS.map(([k, n]) => (
-            <button key={k} className={tab === k ? "tab on" : "tab"} onClick={() => setTab(k)}>{n}</button>
+          {tabs.map(([k, nombre, icono]) => (
+            <button key={k} className={tabActiva === k ? "nav-item on" : "nav-item"} onClick={() => ir(k)}>
+              <Icono nombre={icono} />
+              {nombre}
+            </button>
           ))}
         </nav>
-        <span className="muted">{localStorage.getItem("admin_nombre")}</span>
-        <button className="btn" onClick={salir}>Salir</button>
-      </header>
-      <main>
-        {tab === "empleados" && <Empleados />}
-        {tab === "horarios" && <Horarios />}
-        {tab === "asistencias" && <Asistencias />}
+        <div className="sb-pie">
+          <button className="nav-item" onClick={salir}>
+            <Icono nombre="salir" />
+            Cerrar sesión
+          </button>
+        </div>
+      </aside>
+
+     <main>
+        <div className="pagina" key={tabActiva}>
+          {tabActiva === "dashboard" && <Dashboard />}
+          {tabActiva === "empleados" && <Empleados />}
+          {tabActiva === "horarios" && <Horarios />}
+          {tabActiva === "asistencias" && <Asistencias />}
+          {tabActiva === "administradores" && <Administradores />}
+        </div>
       </main>
     </div>
   );

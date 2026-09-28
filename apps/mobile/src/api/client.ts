@@ -105,6 +105,8 @@ export type JornadaHoy = {
   puntualidad: "a_tiempo" | "tarde";
   horaEntrada: string;
   horaSalida: string | null;
+  // true si la salida cayó al día siguiente de la entrada (turno nocturno).
+  salidaDiaSiguiente: boolean;
   // Minutos trabajados hoy al momento de la consulta (null si expiró sin salida).
   minutosTrabajados: number | null;
 } | null;
@@ -161,6 +163,7 @@ export type RegistroHistorial = {
   diaSemana: string;
   horaEntrada: string;
   horaSalida: string | null;
+  salidaDiaSiguiente: boolean;
   minutosTotales: number | null;
   puntualidad: "a_tiempo" | "tarde";
   estado: "activa" | "cerrada" | "expirada_sin_salida";

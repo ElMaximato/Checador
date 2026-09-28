@@ -124,7 +124,9 @@ export function HistoryScreen({ go }: { go: GoFn }) {
                     </View>
                     <View>
                       <Text style={styles.recordInfoLabel}>Salida</Text>
-                      <Text style={styles.recordInfoValue}>{item.horaSalida ?? "— —"}</Text>
+                      <Text style={styles.recordInfoValue}>
+                        {item.horaSalida ? `${item.horaSalida}${item.salidaDiaSiguiente ? " +1" : ""}` : "— —"}
+                      </Text>
                     </View>
                     <View>
                       <Text style={styles.recordInfoLabel}>Total</Text>

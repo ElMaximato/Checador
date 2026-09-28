@@ -3,9 +3,12 @@ const { requireDeviceSession } = require("../middleware/auth");
 const { uploadFoto } = require("../middleware/upload");
 const { registrarEntrada, registrarSalida, obtenerJornadaHoy, obtenerHistorial } = require("../controllers/attendance.controller");
 
-router.get("/hoy", requireDeviceSession, obtenerJornadaHoy);
-router.get("/historial", requireDeviceSession, obtenerHistorial);
-router.post("/entrada", requireDeviceSession, uploadFoto.single("foto"), registrarEntrada);
-router.post("/salida", requireDeviceSession, uploadFoto.single("foto"), registrarSalida);
+// Express 4 no captura errores de handlers async: se pasan a next().
+const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+router.get("/hoy", requireDeviceSession, ah(obtenerJornadaHoy));
+router.get("/historial", requireDeviceSession, ah(obtenerHistorial));
+router.post("/entrada", requireDeviceSession, uploadFoto.single("foto"), ah(registrarEntrada));
+router.post("/salida", requireDeviceSession, uploadFoto.single("foto"), ah(registrarSalida));
 
 module.exports = router;

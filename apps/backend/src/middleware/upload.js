@@ -1,10 +1,17 @@
+const fs = require("fs");
 const multer = require("multer");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
 
+const UPLOADS_DIR = process.env.UPLOADS_DIR || "./uploads/asistencia";
+
+// multer.diskStorage no crea la carpeta de destino sola; si no existe,
+// falla con ENOENT al guardar el archivo. Se crea una vez al arrancar.
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, process.env.UPLOADS_DIR || "./uploads/asistencia"),
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname) || ".jpg";
     cb(null, `${Date.now()}-${uuidv4()}${ext}`);

@@ -1,0 +1,73 @@
+/* Estructura con barra lateral. Usa la paleta original de style.css (clara,
+   con su versión oscura automática). Solo se agregan variables derivadas;
+   las reglas de estructura se limitan a .shell porque main.jsx carga
+   style.css DESPUÉS de este archivo. */
+:root {
+  --grad: linear-gradient(160deg, var(--primary-dark), var(--primary));
+  --tinte: rgba(20, 33, 61, .06); /* fondo suave sobre tarjetas */
+  --pista: rgba(20, 33, 61, .12); /* fondo de barras y anillos */
+}
+@media (prefers-color-scheme: dark) {
+  :root { --tinte: rgba(255, 255, 255, .07); --pista: rgba(255, 255, 255, .12); }
+}
+
+/* Esquinas rectas en todo el panel (incluido el login). Se usa :root para
+   ganarle a style.css, que se carga después. Se quedan redondos solo el
+   avatar, los puntitos de las leyendas y la dona, que son círculos por diseño. */
+:root .card, :root .btn, :root .badge, :root input, :root select, :root .dia,
+:root .thumb, :root .grande, :root .modal, :root .pin { border-radius: 0; }
+
+.shell {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  grid-template-rows: 76px 1fr;
+  min-height: 100vh;
+}
+.shell main { grid-area: 2 / 2; max-width: none; margin: 0; padding: 24px; min-width: 0; }
+
+.brand {
+  grid-area: 1 / 1; display: flex; align-items: center; padding: 0 24px; background: var(--card);
+  border-bottom: 1px solid var(--line); border-right: 1px solid var(--line);
+  font-size: 24px; font-weight: 300; letter-spacing: 4px; text-transform: uppercase;
+}
+.brand span, .brand-mini span { color: var(--primary); font-weight: 700; }
+.brand-mini { display: none; font-size: 18px; letter-spacing: 3px; text-transform: uppercase; font-weight: 300; }
+
+.topbar {
+  grid-area: 1 / 2; display: flex; align-items: center; gap: 16px; padding: 0 24px;
+  background: var(--card); border-bottom: 1px solid var(--line);
+}
+.topbar .espacio { flex: 1; }
+.topbar .fecha { text-transform: capitalize; }
+.topbar .titulo { font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 300; }
+.menu-btn { display: none; border: 0; background: none; color: var(--text); cursor: pointer; padding: 6px; }
+
+.sidebar { grid-area: 2 / 1; display: flex; flex-direction: column; background: var(--primary-dark); color: #fff; }
+.sb-user { display: flex; align-items: center; gap: 12px; padding: 22px 20px; border-bottom: 1px solid rgba(255, 255, 255, .2); }
+.sb-avatar { width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, .18); display: flex; align-items: center; justify-content: center; flex: none; }
+.sb-user strong { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; line-height: 1.25; }
+.sb-user small { font-size: 12px; opacity: .8; }
+.sidebar nav { display: flex; flex-direction: column; padding: 10px 0; }
+.nav-item {
+  display: flex; align-items: center; gap: 14px; padding: 14px 22px; border: 0; background: none;
+  color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; border-left: 3px solid transparent;
+}
+.nav-item:hover { background: rgba(255, 255, 255, .12); }
+.nav-item.on { background: rgba(255, 255, 255, .2); border-left-color: #fff; font-weight: 700; }
+.sb-pie { margin-top: auto; padding-bottom: 10px; border-top: 1px solid rgba(255, 255, 255, .2); }
+.scrim { display: none; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: 64px 1fr; }
+  .shell main { grid-area: 2 / 1; padding: 16px; }
+  .brand { display: none; }
+  .topbar { grid-area: 1 / 1; padding: 0 12px; }
+  .topbar .titulo { display: none; }
+  .menu-btn, .brand-mini { display: block; }
+  .sidebar {
+    position: fixed; top: 0; bottom: 0; left: 0; width: 260px; z-index: 20;
+    transform: translateX(-100%); transition: transform .2s;
+  }
+  .sidebar.abierto { transform: none; }
+  .scrim.abierto { display: block; position: fixed; inset: 0; background: rgba(10, 16, 28, .5); z-index: 15; }
+}

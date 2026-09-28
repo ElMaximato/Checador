@@ -1,0 +1,51 @@
+/* Animaciones del panel. Se importa en App.jsx justo después de layout.css.
+   Ojo: se usa fill-mode "backwards" (no "both") a propósito: con "both" el
+   contenedor se queda con un transform y los modales (position: fixed) dejan
+   de posicionarse respecto a la ventana. */
+@keyframes subir { from { opacity: 0; transform: translateY(8px); } }
+@keyframes aparecer { from { opacity: 0; } }
+@keyframes entrar-modal { from { opacity: 0; transform: translateY(12px) scale(.97); } }
+
+/* Cambio de pantalla */
+.pagina { animation: subir .28s ease-out backwards; }
+
+/* Filas de tablas: entran en cascada (las primeras 8; el resto aparece junto) */
+tbody tr { animation: subir .3s ease-out backwards; }
+tbody tr:nth-child(2) { animation-delay: .03s; }
+tbody tr:nth-child(3) { animation-delay: .06s; }
+tbody tr:nth-child(4) { animation-delay: .09s; }
+tbody tr:nth-child(5) { animation-delay: .12s; }
+tbody tr:nth-child(6) { animation-delay: .15s; }
+tbody tr:nth-child(7) { animation-delay: .18s; }
+tbody tr:nth-child(n + 8) { animation-delay: .21s; }
+
+/* Tarjetas del dashboard */
+.dash-kpis > *, .fila-2 > *, .fila-3 > * { animation: subir .35s ease-out backwards; }
+.dash-kpis > :nth-child(2), .fila-2 > :nth-child(2), .fila-3 > :nth-child(2) { animation-delay: .06s; }
+.dash-kpis > :nth-child(3), .fila-3 > :nth-child(3) { animation-delay: .12s; }
+.dash-kpis > :nth-child(4) { animation-delay: .18s; }
+
+/* Modales */
+.overlay { animation: aparecer .18s ease-out; }
+.modal { animation: entrar-modal .22s ease-out backwards; }
+
+/* Barra lateral (móvil): el fondo oscuro se desvanece en vez de saltar */
+@media (max-width: 900px) {
+  .scrim { display: block; position: fixed; inset: 0; background: rgba(10, 16, 28, .5); z-index: 15; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .scrim.abierto { opacity: 1; pointer-events: auto; }
+  .sidebar { transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
+}
+
+/* Interacciones */
+.btn, .nav-item, .tab, .dia, .thumb, input, select { transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s, transform .15s, opacity .15s; }
+.btn:hover:not(:disabled) { border-color: var(--primary); }
+.btn:active:not(:disabled), .dia:active { transform: translateY(1px); }
+.thumb:hover { transform: scale(1.06); }
+input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(23, 107, 112, .18); }
+tbody tr:hover td { background: var(--tinte); }
+.prog i { transition: width .5s ease; }
+
+/* Respeta a quien desactiva las animaciones en su sistema */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
+}

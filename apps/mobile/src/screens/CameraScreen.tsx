@@ -5,12 +5,17 @@ import { Icon } from "../components/Icon";
 import { registrarEntrada, registrarSalida, ApiError } from "../api/client";
 import type { GoFn } from "../navigation/types";
 
+const SEGUNDOS_CUENTA = 3;
+
 export function CameraScreen({ go, tipo = "entrada" }: { go: GoFn; tipo?: "entrada" | "salida" }) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [seconds, setSeconds] = useState(3);
+  const [seconds, setSeconds] = useState(SEGUNDOS_CUENTA);
   const [faceDetected] = useState(true); // placeholder: detección real vía librería de visión si se requiere
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cada reintento sube este contador para que el efecto de la cuenta
+  // regresiva vuelva a correr (antes solo corría una vez al abrir la pantalla).
+  const [intento, setIntento] = useState(0);
   const cameraRef = useRef<CameraView>(null);
   const capturedRef = useRef(false);
 
@@ -19,21 +24,26 @@ export function CameraScreen({ go, tipo = "entrada" }: { go: GoFn; tipo?: "entra
   }, [permission]);
 
   useEffect(() => {
+    // La cuenta regresiva solo arranca con permiso de cámara concedido.
+    if (!permission?.granted) return;
+
+    capturedRef.current = false;
+    let restante = SEGUNDOS_CUENTA;
+    setSeconds(restante);
+
     const timer = setInterval(() => {
-      setSeconds((value) => {
-        if (value <= 1) {
-          clearInterval(timer);
-          if (!capturedRef.current) {
-            capturedRef.current = true;
-            capture();
-          }
-          return 0;
+      restante -= 1;
+      setSeconds(restante);
+      if (restante <= 0) {
+        clearInterval(timer);
+        if (!capturedRef.current) {
+          capturedRef.current = true;
+          capture();
         }
-        return value - 1;
-      });
+      }
     }, 850);
     return () => clearInterval(timer);
-  }, []);
+  }, [permission?.granted, intento]);
 
   const capture = async () => {
     setEnviando(true);
@@ -61,6 +71,12 @@ export function CameraScreen({ go, tipo = "entrada" }: { go: GoFn; tipo?: "entra
     }
   };
 
+  const reintentar = () => {
+    setError(null);
+    setEnviando(false);
+    setIntento((n) => n + 1);
+  };
+
   if (!permission) return <View style={styles.screen} />;
 
   if (!permission.granted) {
@@ -80,14 +96,7 @@ export function CameraScreen({ go, tipo = "entrada" }: { go: GoFn; tipo?: "entra
     return (
       <View style={[styles.screen, styles.centered]}>
         <Text style={styles.permissionText}>{error}</Text>
-        <Pressable
-          style={styles.permissionButton}
-          onPress={() => {
-            setError(null);
-            setSeconds(3);
-            capturedRef.current = false;
-          }}
-        >
+        <Pressable style={styles.permissionButton} onPress={reintentar}>
           <Text style={styles.permissionButtonText}>Reintentar</Text>
         </Pressable>
         <Pressable style={{ marginTop: 14 }} onPress={() => go("home")}>

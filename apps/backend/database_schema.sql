@@ -3,12 +3,31 @@
 -- Esquema de Base de Datos (MySQL)
 -- Módulos: Empleados, Horarios, Dispositivos, Jornadas,
 --          Anuncios, Multimedia, Playlists, TV, Admins
+--
+-- Cómo usar este archivo (Workbench u otro cliente MySQL):
+--   1. Ejecuta este archivo completo con el rayo (Execute).
+--      Ya crea la base de datos y las tablas en un solo paso.
+--   2. Confirma que "control_asistencia" quede como base activa
+--      (aparece en negritas en el panel de Schemas).
+--   3. Crea el primer administrador desde la terminal del backend:
+--        node scripts/crearAdmin.js "Tu Nombre" correo@ejemplo.com contraseña
+--
+-- Este esquema NO ha cambiado de estructura desde la versión
+-- original: solo agrega CREATE DATABASE / USE e IF NOT EXISTS en
+-- cada tabla, para poder correrlo de una sola vez sin pasos
+-- manuales y sin que truene si se ejecuta dos veces por accidente.
 -- ============================================================
+
+CREATE DATABASE IF NOT EXISTS control_asistencia
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE control_asistencia;
 
 -- ------------------------------------------------------------
 -- MÓDULO: ADMINISTRADORES (Panel Web)
 -- ------------------------------------------------------------
-CREATE TABLE admins (
+CREATE TABLE IF NOT EXISTS admins (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     nombre          VARCHAR(150) NOT NULL,
     email           VARCHAR(150) NOT NULL UNIQUE,
@@ -22,7 +41,7 @@ CREATE TABLE admins (
 -- ------------------------------------------------------------
 -- MÓDULO: HORARIOS Y TOLERANCIA
 -- ------------------------------------------------------------
-CREATE TABLE horarios (
+CREATE TABLE IF NOT EXISTS horarios (
     id                  INT AUTO_INCREMENT PRIMARY KEY,
     nombre              VARCHAR(100) NOT NULL,           -- ej: "Turno Matutino"
     hora_entrada        TIME NOT NULL,                   -- ej: 08:00:00
@@ -34,7 +53,7 @@ CREATE TABLE horarios (
 );
 
 -- Días de la semana en que aplica cada horario (L-V, etc.)
-CREATE TABLE horarios_dias (
+CREATE TABLE IF NOT EXISTS horarios_dias (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     horario_id  INT NOT NULL,
     dia_semana  TINYINT NOT NULL,   -- 1=Lunes ... 7=Domingo
@@ -45,12 +64,12 @@ CREATE TABLE horarios_dias (
 -- ------------------------------------------------------------
 -- MÓDULO: EMPLEADOS
 -- ------------------------------------------------------------
-CREATE TABLE departamentos (
+CREATE TABLE IF NOT EXISTS departamentos (
     id      INT AUTO_INCREMENT PRIMARY KEY,
     nombre  VARCHAR(100) NOT NULL UNIQUE
 );
 
-CREATE TABLE empleados (
+CREATE TABLE IF NOT EXISTS empleados (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     nombre          VARCHAR(150) NOT NULL,
     puesto          VARCHAR(100) NOT NULL,
@@ -67,7 +86,7 @@ CREATE TABLE empleados (
 -- ------------------------------------------------------------
 -- MÓDULO: DISPOSITIVOS (sesión larga por teléfono / PIN)
 -- ------------------------------------------------------------
-CREATE TABLE dispositivos_empleado (
+CREATE TABLE IF NOT EXISTS dispositivos_empleado (
     id                  INT AUTO_INCREMENT PRIMARY KEY,
     empleado_id         INT NOT NULL,
     device_id           VARCHAR(255) NOT NULL,          -- identificador único del teléfono
@@ -88,7 +107,7 @@ CREATE TABLE dispositivos_empleado (
 -- ------------------------------------------------------------
 -- MÓDULO: JORNADAS / ASISTENCIA (token corto de 10h, 1 por día)
 -- ------------------------------------------------------------
-CREATE TABLE jornadas (
+CREATE TABLE IF NOT EXISTS jornadas (
     id                      INT AUTO_INCREMENT PRIMARY KEY,
     empleado_id             INT NOT NULL,
     dispositivo_id          INT NOT NULL,               -- desde qué dispositivo se generó
@@ -113,7 +132,7 @@ CREATE TABLE jornadas (
 -- ------------------------------------------------------------
 -- MÓDULO: ANUNCIOS (para TV)
 -- ------------------------------------------------------------
-CREATE TABLE anuncios (
+CREATE TABLE IF NOT EXISTS anuncios (
     id           INT AUTO_INCREMENT PRIMARY KEY,
     titulo       VARCHAR(200) NOT NULL,
     contenido    TEXT NOT NULL,
@@ -128,7 +147,7 @@ CREATE TABLE anuncios (
 -- ------------------------------------------------------------
 -- MÓDULO: MULTIMEDIA Y PLAYLISTS (para TV)
 -- ------------------------------------------------------------
-CREATE TABLE multimedia (
+CREATE TABLE IF NOT EXISTS multimedia (
     id           INT AUTO_INCREMENT PRIMARY KEY,
     tipo         ENUM('imagen', 'musica', 'video') NOT NULL,
     nombre       VARCHAR(200) NOT NULL,
@@ -141,14 +160,14 @@ CREATE TABLE multimedia (
     FOREIGN KEY (subido_por) REFERENCES admins(id)
 );
 
-CREATE TABLE playlists (
+CREATE TABLE IF NOT EXISTS playlists (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     nombre     VARCHAR(150) NOT NULL,
     activo     BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE playlist_items (
+CREATE TABLE IF NOT EXISTS playlist_items (
     id                INT AUTO_INCREMENT PRIMARY KEY,
     playlist_id       INT NOT NULL,
     multimedia_id     INT NOT NULL,
@@ -162,7 +181,7 @@ CREATE TABLE playlist_items (
 -- ------------------------------------------------------------
 -- MÓDULO: DISPOSITIVOS TV
 -- ------------------------------------------------------------
-CREATE TABLE dispositivos_tv (
+CREATE TABLE IF NOT EXISTS dispositivos_tv (
     id                INT AUTO_INCREMENT PRIMARY KEY,
     nombre            VARCHAR(100) NOT NULL,      -- ej: "TV Recepción"
     ubicacion         VARCHAR(150),

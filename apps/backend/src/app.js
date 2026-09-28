@@ -1,5 +1,5 @@
 const express = require("express");
-const cors = require("cors");
+const { corsHttp, bloquearOrigenNoPermitido } = require("./config/cors");
 const path = require("path");
 
 const authRoutes = require("./routes/auth.routes");
@@ -9,7 +9,8 @@ const adminRoutes = require("./routes/admin.routes");
 
 const app = express();
 
-app.use(cors());
+app.use(bloquearOrigenNoPermitido);
+app.use(corsHttp);
 app.use(express.json());
 
 // Fotos servidas estáticamente (en producción: bucket S3-compatible)
