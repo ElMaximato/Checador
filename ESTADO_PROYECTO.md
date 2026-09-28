@@ -125,8 +125,6 @@ Requiere **Expo Go para SDK 52** en el teléfono (la versión más reciente de E
 
 ### Pendiente en la app móvil
 
-- [ ] Turnos nocturnos (cruzan medianoche) no funcionan para registrar la salida.
-- [ ] La cámara no verifica que haya un rostro real en la foto; cualquier imagen cuenta como evidencia.
 - [ ] Empaquetado para producción: generar APK / build de iOS con EAS Build (hoy solo corre con Expo Go, modo desarrollo).
 - [ ] `API_BASE_URL` fija por archivo; para producción debe apuntar a un dominio real con HTTPS.
 

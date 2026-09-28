@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const app = require("./app");
 const { iniciarJobJornadasVencidas } = require("./jobs/jornadasVencidas");
 const { opcionesSocket } = require("./config/cors");
+const { MODO: MODO_ROSTRO, precalentar: precalentarRostro } = require("./utils/rostro");
 
 const server = http.createServer(app);
 
@@ -20,6 +21,14 @@ io.on("connection", (socket) => {
 app.set("io", io);
 
 iniciarJobJornadasVencidas();
+
+// Carga el detector de rostros ahora, para ver en consola si quedó bien instalado
+// (si no, la primera foto real tardaría más y el error aparecería ahí).
+if (MODO_ROSTRO !== "desactivado") {
+  precalentarRostro()
+    .then(() => console.log(`Verificación de rostro lista (modo ${MODO_ROSTRO})`))
+    .catch((err) => console.error(`[rostro] El detector NO arrancó (modo ${MODO_ROSTRO}): ${err.message}`));
+}
 
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => console.log(`Backend escuchando en puerto ${PORT}`));
