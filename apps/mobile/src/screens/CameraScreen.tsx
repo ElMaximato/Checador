@@ -10,7 +10,6 @@ const SEGUNDOS_CUENTA = 3;
 export function CameraScreen({ go, tipo = "entrada" }: { go: GoFn; tipo?: "entrada" | "salida" }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [seconds, setSeconds] = useState(SEGUNDOS_CUENTA);
-  const [faceDetected] = useState(true); // placeholder: detección real vía librería de visión si se requiere
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Cada reintento sube este contador para que el efecto de la cuenta
@@ -127,12 +126,11 @@ export function CameraScreen({ go, tipo = "entrada" }: { go: GoFn; tipo?: "entra
           <View style={[styles.corner, styles.cornerBR]} />
         </View>
         <View style={styles.message}>
-          {faceDetected && (
-            <View style={styles.statusChip}>
-              <View style={styles.statusChipDot} />
-              <Text style={styles.statusChipText}>Rostro detectado</Text>
-            </View>
-          )}
+          {/* La verificación del rostro la hace el servidor al recibir la foto. */}
+          <View style={styles.statusChip}>
+            <View style={styles.statusChipDot} />
+            <Text style={styles.statusChipText}>{enviando ? "Verificando foto" : "Encuadra tu rostro"}</Text>
+          </View>
           <Text style={styles.title}>Mira de frente</Text>
           <Text style={styles.subtitle}>
             {enviando ? "Enviando registro..." : "La fotografía se tomará automáticamente"}
