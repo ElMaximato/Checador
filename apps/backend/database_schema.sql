@@ -185,10 +185,16 @@ CREATE TABLE IF NOT EXISTS dispositivos_tv (
     id                INT AUTO_INCREMENT PRIMARY KEY,
     nombre            VARCHAR(100) NOT NULL,      -- ej: "TV Recepción"
     ubicacion         VARCHAR(150),
+    -- Emparejamiento: la TV pide un código, el admin lo captura en el panel.
+    estado            ENUM('pendiente', 'emparejado', 'revocado') NOT NULL DEFAULT 'pendiente',
+    codigo_emparejamiento VARCHAR(8) NULL,
+    codigo_expira     DATETIME NULL,
+    claim_hash        CHAR(64) NULL,              -- hash del secreto que solo conoce la TV
     playlist_activa_id INT NULL,
     ultimo_ping       TIMESTAMP NULL,
     activo            BOOLEAN NOT NULL DEFAULT TRUE,
     created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_tv_codigo (codigo_emparejamiento),
     FOREIGN KEY (playlist_activa_id) REFERENCES playlists(id)
 );
 

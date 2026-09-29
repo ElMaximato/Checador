@@ -38,6 +38,34 @@ const RUTAS = {
       <line x1="3" y1="18" x2="21" y2="18" />
     </>
   ),
+  tv: (
+    <>
+      <rect x="2" y="7" width="20" height="14" rx="2" />
+      <polyline points="17 2 12 7 7 2" />
+    </>
+  ),
+  anuncio: (
+    <>
+      <path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z" />
+      <path d="M16.5 8.5a5 5 0 0 1 0 7" />
+    </>
+  ),
+  multimedia: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </>
+  ),
+  playlist: (
+    <>
+      <line x1="3" y1="6" x2="15" y2="6" />
+      <line x1="3" y1="12" x2="15" y2="12" />
+      <line x1="3" y1="18" x2="10" y2="18" />
+      <path d="M19 8v9" />
+      <circle cx="17" cy="17" r="2" />
+    </>
+  ),
   usuario: (
     <>
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />

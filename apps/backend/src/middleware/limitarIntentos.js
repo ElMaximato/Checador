@@ -20,4 +20,14 @@ const limitarFallidos = () =>
 const limitarLogin = limitarFallidos(); // login del panel de administración
 const limitarActivacion = limitarFallidos(); // activación de la app con PIN
 
-module.exports = { limitarLogin, limitarActivacion };
+// Pedir código de emparejamiento es público (la TV aún no tiene credenciales):
+// se limita cada petición, no solo las fallidas, para que nadie llene la tabla.
+const limitarCodigoTv = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes de código. Inténtalo de nuevo en 15 minutos." },
+});
+
+module.exports = { limitarLogin, limitarActivacion, limitarCodigoTv };

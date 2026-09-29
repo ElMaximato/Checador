@@ -26,3 +26,25 @@ export async function api(ruta, { method = "GET", body } = {}) {
   if (!res.ok) throw new Error(data.error || "Error inesperado");
   return data;
 }
+
+
+// Subida de archivos (multipart). Sin Content-Type: el navegador pone el boundary.
+export async function apiSubir(ruta, formData) {
+  let res;
+  try {
+    res = await fetch(`${BASE}/api/admin${ruta}`, {
+      method: "POST",
+      headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+      body: formData,
+    });
+  } catch {
+    throw new Error("No se pudo conectar con el servidor");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    localStorage.removeItem("admin_token");
+    alCerrarSesion();
+  }
+  if (!res.ok) throw new Error(data.error || "Error inesperado");
+  return data;
+}

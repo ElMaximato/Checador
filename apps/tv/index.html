@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checador TV</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Emparejamiento -->
+  <main id="pantalla-emparejar" class="pantalla" hidden>
+    <h1>Checador <span>TV</span></h1>
+    <p class="pista">Para vincular esta pantalla, en el panel de administración entra a <b>Pantallas TV → Emparejar TV</b> y escribe este código:</p>
+    <div id="codigo" class="codigo" aria-live="polite">······</div>
+    <p id="estado-emparejar" class="pista chica"></p>
+  </main>
+
+  <!-- Reproducción -->
+  <main id="pantalla-reproduccion" class="pantalla" hidden>
+    <div id="escena"></div>
+    <div id="sin-conexion" class="aviso" hidden>Sin conexión con el servidor</div>
+  </main>
+
+  <!-- Nada que mostrar -->
+  <main id="pantalla-espera" class="pantalla" hidden>
+    <h1>Checador <span>TV</span></h1>
+    <p class="pista">Esta pantalla está lista. Asígnale una playlist en el panel de administración.</p>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

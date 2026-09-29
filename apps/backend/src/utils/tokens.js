@@ -23,7 +23,21 @@ function verificarTokenJornada(token) {
   return jwt.verify(token, process.env.JWT_JORNADA_SECRET);
 }
 
+// Capa 3: token de pantalla de TV. Sin expiración por tiempo — vive hasta que
+// el admin revoque la TV (dispositivos_tv.estado = 'revocado').
+function firmarTokenTv({ dispositivoId }) {
+  return jwt.sign({ dispositivoId, tipo: "tv" }, process.env.JWT_TV_SECRET);
+}
+
+function verificarTokenTv(token) {
+  const p = jwt.verify(token, process.env.JWT_TV_SECRET);
+  if (p.tipo !== "tv") throw new Error("Token de tipo incorrecto");
+  return p;
+}
+
 module.exports = {
+  firmarTokenTv,
+  verificarTokenTv,
   firmarTokenDispositivo,
   verificarTokenDispositivo,
   firmarTokenJornada,

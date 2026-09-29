@@ -6,8 +6,13 @@ import Empleados from "./pages/Empleados";
 import Horarios from "./pages/Horarios";
 import Asistencias from "./pages/Asistencias";
 import Administradores from "./pages/Administradores";
+import Anuncios from "./pages/Anuncios";
+import Multimedia from "./pages/Multimedia";
+import Playlists from "./pages/Playlists";
+import PantallasTv from "./pages/PantallasTv";
 import "./layout.css";
 import "./animaciones.css";
+import "./tv.css";
 
 function Login({ onOk }) {
   const [email, setEmail] = useState("");
@@ -52,11 +57,15 @@ const TABS_BASE = [
   ["empleados", "Empleados", "usuarios"],
   ["horarios", "Horarios", "reloj"],
   ["asistencias", "Asistencias", "calendario"],
+  ["anuncios", "Anuncios TV", "anuncio"],
+  ["multimedia", "Multimedia", "multimedia"],
+  ["playlists", "Playlists", "playlist"],
+  ["pantallas", "Pantallas TV", "tv"],
 ];
 const NOMBRE_ROL = { super_admin: "Super administrador", rh: "Recursos Humanos", supervisor: "Supervisor" };
 
 
-const TABS_VALIDAS = ["dashboard", "empleados", "horarios", "asistencias", "administradores"];
+const TABS_VALIDAS = ["dashboard", "empleados", "horarios", "asistencias", "anuncios", "multimedia", "playlists", "pantallas", "administradores"];
 const tabDesdeHash = () => {
   const k = window.location.hash.replace(/^#\/?/, "");
   return TABS_VALIDAS.includes(k) ? k : "dashboard";
@@ -146,6 +155,10 @@ export default function App() {
           {tabActiva === "empleados" && <Empleados />}
           {tabActiva === "horarios" && <Horarios />}
           {tabActiva === "asistencias" && <Asistencias />}
+          {tabActiva === "anuncios" && <Anuncios />}
+          {tabActiva === "multimedia" && <Multimedia />}
+          {tabActiva === "playlists" && <Playlists />}
+          {tabActiva === "pantallas" && <PantallasTv />}
           {tabActiva === "administradores" && <Administradores />}
         </div>
       </main>
